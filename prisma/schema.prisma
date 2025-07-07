@@ -1,0 +1,105 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+// TODO: initialize local postgres server
+// TODO: run prisma migrate dev
+
+// datasource and generator block
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Enum for RSVP Status
+enum RSVPStatus {
+  YES
+  NO
+  MAYBE
+}
+
+// --- Model Definitions ---
+
+model User {
+  id                  String     @id @default(uuid())
+  email               String     @unique
+  name                String?
+  password            String     // IMPORTANT: Always hash passwords before storing.
+  phoneNumber         String?    @unique 
+  activityPreferences String[]
+
+  // --- Relations ---
+  hostedTrips Trip[]     @relation("HostToTrips")
+  rsvps       TripRSVP[] // A user can have many RSVPs to different trips.
+  comments    Comment[]  // One user, many comments
+}
+
+model Trip {
+  id            String    @id @default(uuid())
+  title         String
+  description   String?
+  tripImage     String?
+  inviteLink    String    @unique @default(cuid())
+  private       Boolean   @default(true) // default private trips
+  estimatedTime Decimal?
+  startTime     Decimal?
+  savedImages   String[]
+
+  // --- Relations ---
+  hostId String
+  host   User   @relation("HostToTrips", fields: [hostId], references: [id])
+
+  rsvps     TripRSVP[] // A trip can have many RSVPs from different users.
+  locations Location[] // Many-to-many with Location (implicit join table).
+  comments  Comment[]  // Many-to-many
+}
+
+model Location {
+  id            String  @id @default(uuid())
+  googlePlaceId String  @unique
+  name          String
+  address       String
+  image         String?
+  locationTime  String? // Consider using DateTime (?)
+
+  // --- Relations ---
+  trips    Trip[]    // A location can be part of many trips.
+  comments Comment[]
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  text      String
+  createdAt DateTime @default(now())
+
+  // --- Relations ---
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  tripId String
+  trip   Trip   @relation(fields: [tripId], references: [id])
+
+  // A comment can optionally be about a specific location within the trip.
+  locationId String?
+  location   Location? @relation(fields: [locationId], references: [id])
+}
+
+model TripRSVP {
+  id     String     @id @default(uuid())
+  status RSVPStatus
+
+  // --- Relations ---
+  userId String
+  tripId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trip   Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  // A user can only have one RSVP status per trip.
+  @@unique([userId, tripId])
+}

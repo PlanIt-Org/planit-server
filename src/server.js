@@ -1,0 +1,52 @@
+require("dotenv").config();
+
+const express = require("express");
+const app = express();
+const morgan = require("morgan");
+const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
+const PORT = process.env.PORT || 3000;
+const CORS_ORIGIN = process.env.CORS_ORIGIN;
+
+// Import route files
+const userRoutes = require("./routes/userRoutes");
+const tripRoutes = require("./routes/tripRoutes");
+const locationRoutes = require("./routes/locationRoutes");
+const commentRoutes = require("./routes/commentRoutes");
+const tripRSVPRoutes = require("./routes/tripRSVPRoutes");
+
+// HTTP access log
+app.use(morgan("dev"));
+const accessLogStream = fs.createWriteStream(
+  path.join(__dirname, "access.log"),
+  { flags: "a" }
+);
+app.use(morgan("combined", { stream: accessLogStream }));
+
+// Middleware to parse JSON request bodies
+app.use(cors(corsOption));
+app.use(express.json());
+
+// Basic route for testing server status
+app.get("/", (req, res) => {
+  res.send("API is running...");
+});
+
+// Mount the routers
+app.use("/api/users", userRoutes);
+app.use("/api/trips", tripRoutes);
+app.use("/api/locations", locationRoutes);
+app.use("/api/comments", commentRoutes);
+app.use("/api/rsvps", tripRSVPRoutes);
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+// Sigint handler for graceful shutdown
+process.on("SIGINT", async () => {
+  console.log("\nServer shutting down...");
+  process.exit(0);
+});

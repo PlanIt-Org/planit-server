@@ -25,3 +25,4 @@ coverage/
 
 # Ignore log files and directories
 /logs/
+/src/generated/prisma
