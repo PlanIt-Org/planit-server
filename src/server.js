@@ -9,6 +9,10 @@ const path = require("path");
 const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN;
 
+const corsOption = {
+  origin: CORS_ORIGIN,
+};
+
 // Import route files
 const userRoutes = require("./routes/userRoutes");
 const tripRoutes = require("./routes/tripRoutes");
