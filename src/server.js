@@ -19,6 +19,7 @@ const tripRoutes = require("./routes/tripRoutes");
 const locationRoutes = require("./routes/locationRoutes");
 const commentRoutes = require("./routes/commentRoutes");
 const tripRSVPRoutes = require("./routes/tripRSVPRoutes");
+const openRouterRoutes = require("./routes/openRouterRoutes");
 
 // HTTP access log
 app.use(morgan("dev"));
@@ -43,6 +44,7 @@ app.use("/api/trips", tripRoutes);
 app.use("/api/locations", locationRoutes);
 app.use("/api/comments", commentRoutes);
 app.use("/api/rsvps", tripRSVPRoutes);
+app.use("/api/openrouter", openRouterRoutes);
 
 // Start the server
 app.listen(PORT, () => {
