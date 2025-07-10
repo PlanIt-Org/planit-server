@@ -52,7 +52,10 @@ const tripController = {
 
   getTripSchedule: async (req, res) => {
     // Controller logic here
+    // get time information
   },
+
+  // get preferences, etc.
 };
 
 module.exports = tripController;

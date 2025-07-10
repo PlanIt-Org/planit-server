@@ -19,6 +19,7 @@ const tripRSVPController = {
   // Example: Update an RSVP
   updateTripRSVP: async (req, res) => {
     // Controller logic here
+    // change enum here
   },
 
   // Example: Delete an RSVP

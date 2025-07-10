@@ -57,7 +57,7 @@ model Trip {
   
   status        TripStatus @default(PLANNING)
   maxGuests     Int?
-  isTemplate    Boolean   @default(false) // For sharing past trips
+  // isTemplate    Boolean   @default(false) // For sharing past trips
   
   // --- Relations ---
   hostId String
@@ -78,6 +78,9 @@ model Location {
   address       String
   image         String?
   locationTime  String? // Consider using DateTime (?)
+
+  // TODO: add weather data
+  // TODO: add Gmaps data
 
   // --- Relations ---
   trips    Trip[]    // A location can be part of many trips.
@@ -133,6 +136,7 @@ model ProposedGuest {
   name   String?
   invitedAt DateTime @default(now())
   
+  // TODO: relate to user ?
   trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
 }
 
@@ -179,5 +183,5 @@ model UserPreferences {
   travelStyle  String[] // ["adventure", "relaxation", "culture", etc.]
   dietaryRestrictions String[]
   accessibilityNeeds String[]
-  preferredTransportation String[]
+  preferredTransportation String[] //  TODO: circle back to this later
 }

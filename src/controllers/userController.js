@@ -36,6 +36,7 @@ const userController = {
 
   getUserPreferences: async (req, res) => {
     // Controller logic here
+    // run suggestions through here
   },
 
   updateUserPreferences: async (req, res) => {
