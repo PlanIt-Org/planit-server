@@ -17,4 +17,40 @@ router.post("/", tripController.createTrip);
 // Delete a trip
 router.delete("/:id", tripController.deleteTrip);
 
+// Add co-hosts to a trip
+router.post("/:id/co-hosts", tripController.addCoHost);
+
+// Remove co-hosts from a trip
+router.delete("/:id/co-hosts/:userId", tripController.removeCoHost);
+
+// Add proposed guests to a trip
+router.post("/:id/guests", tripController.addProposedGuest);
+
+// Remove proposed guests from a trip
+router.delete("/:id/guests/:guestId", tripController.removeProposedGuest);
+
+// Get proposed guests for a trip
+router.get("/:id/guests", tripController.getProposedGuests);
+
+// Create a poll for a trip
+router.post("/:id/polls", tripController.createPoll);
+
+// Get polls for a trip
+router.get("/:id/polls", tripController.getTripPolls);
+
+// Vote on a poll
+router.post("/:id/polls/:pollId/vote", tripController.voteOnPoll);
+
+// Get trip templates
+router.get("/templates", tripController.getTripTemplates);
+
+// Clone a trip as a template
+router.post("/:id/clone", tripController.cloneTripAsTemplate);
+
+// Get trip schedule
+router.get("/:id/schedule", tripController.getTripSchedule);
+
+// Update trip schedule
+router.put("/:id/schedule", tripController.updateTripSchedule);
+
 module.exports = router;

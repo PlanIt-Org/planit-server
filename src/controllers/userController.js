@@ -25,6 +25,22 @@ const userController = {
   deleteUser: async (req, res) => {
     // Controller logic here
   },
+
+  getUserProfile: async (req, res) => {
+    // Controller logic here
+  },
+
+  updateUserProfile: async (req, res) => {
+    // Controller logic here
+  },
+
+  getUserPreferences: async (req, res) => {
+    // Controller logic here
+  },
+
+  updateUserPreferences: async (req, res) => {
+    // Controller logic here
+  },
 };
 
 module.exports = userController;

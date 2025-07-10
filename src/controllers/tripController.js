@@ -1,7 +1,6 @@
 const prisma = require("../db/db");
 
 const tripController = {
-  // Example: Get all trips
   getAllTrips: async (req, res) => {
     // Controller logic here
   },
@@ -23,6 +22,35 @@ const tripController = {
 
   // Example: Delete a trip
   deleteTrip: async (req, res) => {
+    // Controller logic here
+  },
+
+  // Example: Generate a shareable link for a trip
+  generateShareableLink: async (req, res) => {
+    // Controller logic here
+    // Check if the trip exists
+    // Generate a new unique invite link
+    // Update the trip with the new invite link
+    // Construct the full shareable URL
+  },
+
+  getTripByInviteLink: async (req, res) => {
+    // Controller logic here
+  },
+
+  addCoHost: async (req, res) => {
+    // Controller logic here
+  },
+
+  removeCoHost: async (req, res) => {
+    // Controller logic here
+  },
+
+  createPoll: async (req, res) => {
+    // Controller logic here
+  },
+
+  getTripSchedule: async (req, res) => {
     // Controller logic here
   },
 };
