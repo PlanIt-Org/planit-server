@@ -1,20 +1,24 @@
 const express = require("express");
 const router = express.Router();
 const userController = require("../controllers/userController");
+const syncUserWithDatabase = require("../middleware/userSync");
 
-// Get all users
-router.get("/", userController.getAllUsers);
+// Apply user sync middleware to all user routes
+router.use(syncUserWithDatabase);
 
-// Get user by ID
-router.get("/:id", userController.getUserById);
+// Get current user's profile
+router.get("/me", userController.getCurrentUser);
 
-// Create a new user
-router.post("/", userController.createUser);
+// Update current user's profile
+router.put("/me", userController.updateCurrentUser);
 
-// Update a user (uncomment and implement when ready)
-// router.put("/:id", userController.updateUser);
+// Get user preferences
+router.get("/preferences", userController.getUserPreferences);
 
-// Delete a user
-router.delete("/:id", userController.deleteUser);
+// Update user preferences
+router.put("/preferences", userController.updateUserPreferences);
+
+// Get user past trips
+router.get("/past-trips", userController.getUserPastTrips);
 
 module.exports = router;
