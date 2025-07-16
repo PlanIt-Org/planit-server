@@ -25,6 +25,28 @@ const userController = {
   deleteUser: async (req, res) => {
     // Controller logic here
   },
+
+  getUserProfile: async (req, res) => {
+    // Controller logic here
+  },
+
+  updateUserProfile: async (req, res) => {
+    // Controller logic here
+  },
+
+  getUserPreferences: async (req, res) => {
+    // Controller logic here
+    // run suggestions through here
+  },
+
+  updateUserPreferences: async (req, res) => {
+    // Controller logic here
+  },
+
+  getUserPastTrips: async (req, res) => {
+    // Controller logic here
+    res.status(501).json({ message: "Not implemented yet" });
+  },
 };
 
 module.exports = userController;

@@ -17,4 +17,25 @@ router.post("/", locationController.createLocation);
 // Delete a location
 router.delete("/:id", locationController.deleteLocation);
 
+// Add these routes to locationRoutes.js
+router.get("/search", locationController.searchLocations);
+
+// Get recommended locations
+router.get("/recommendations", locationController.getRecommendedLocations);
+
+// Filter locations
+router.get("/filter", locationController.filterLocations);
+
+// Get location details
+router.get("/:id/details", locationController.getLocationDetails);
+
+// Get location weather
+router.get("/:id/weather", locationController.getLocationWeather);
+
+// Get location hours
+router.get("/:id/hours", locationController.getLocationHours);
+
+// Get route to location
+router.get("/:id/route", locationController.getRouteToLocation);
+
 module.exports = router;
