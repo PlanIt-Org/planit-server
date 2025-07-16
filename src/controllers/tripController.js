@@ -54,7 +54,38 @@ const tripController = {
     // Controller logic here
     // get time information
   },
-
+  addProposedGuest: async (req, res) => {
+    // TODO: Implement addProposedGuest logic
+    res.status(501).json({ message: "Not implemented yet" });
+  },
+  removeProposedGuest: async (req, res) => {
+    // TODO: Implement removeProposedGuest logic
+    res.status(501).json({ message: "Not implemented yet" });
+  },
+  getProposedGuests: async (req, res) => {
+    // TODO: Implement getProposedGuests logic
+    res.status(501).json({ message: "Not implemented yet" });
+  },
+  getTripPolls: async (req, res) => {
+    // TODO: Implement getTripPolls logic
+    res.status(501).json({ message: "Not implemented yet" });
+  },
+  voteOnPoll: async (req, res) => {
+    // TODO: Implement voteOnPoll logic
+    res.status(501).json({ message: "Not implemented yet" });
+  },
+  getTripTemplates: async (req, res) => {
+    // TODO: Implement getTripTemplates logic
+    res.status(501).json({ message: "Not implemented yet" });
+  },
+  cloneTripAsTemplate: async (req, res) => {
+    // TODO: Implement cloneTripAsTemplate logic
+    res.status(501).json({ message: "Not implemented yet" });
+  },
+  updateTripSchedule: async (req, res) => {
+    // TODO: Implement updateTripSchedule logic
+    res.status(501).json({ message: "Not implemented yet" });
+  },
   // get preferences, etc.
 };
 

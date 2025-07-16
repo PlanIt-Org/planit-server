@@ -42,6 +42,11 @@ const userController = {
   updateUserPreferences: async (req, res) => {
     // Controller logic here
   },
+
+  getUserPastTrips: async (req, res) => {
+    // Controller logic here
+    res.status(501).json({ message: "Not implemented yet" });
+  },
 };
 
 module.exports = userController;
