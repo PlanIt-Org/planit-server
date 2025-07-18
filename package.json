@@ -9,10 +9,13 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@clerk/backend": "^2.5.0",
+    "@clerk/clerk-js": "^5.74.0",
+    "@clerk/express": "^1.7.10",
     "@prisma/client": "^6.11.1",
     "axios": "^1.10.0",
     "cors": "^2.8.5",
-    "dotenv": "^17.1.0",
+    "dotenv": "^17.2.0",
     "express": "^5.1.0",
     "morgan": "^1.10.0",
     "node": "^22.17.0",
