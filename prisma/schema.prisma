@@ -31,7 +31,7 @@ model User {
   clerkId             String     @unique 
   email               String     @unique
   name                String?
-  password            String     // IMPORTANT: Always hash passwords before storing.
+  password            String     
   phoneNumber         String?    @unique 
   activityPreferences String[]
 
@@ -39,6 +39,9 @@ model User {
   hostedTrips Trip[]     @relation("HostToTrips")
   rsvps       TripRSVP[] // A user can have many RSVPs to different trips.
   comments    Comment[]  // One user, many comments
+  coHostedTrips TripCoHost[] // Multiple hosts per trip
+  pollResponses PollResponse[]
+  userPreferences UserPreferences?
 }
 
 model Trip {
@@ -47,18 +50,26 @@ model Trip {
   description   String?
   tripImage     String?
   inviteLink    String    @unique @default(cuid())
-  private       Boolean   @default(true) // default private trips
+  private       Boolean   @default(true)
   estimatedTime Decimal?
-  startTime     Decimal?
+  startTime     DateTime? 
+  endTime       DateTime? 
   savedImages   String[]
-
+  
+  status        TripStatus @default(PLANNING)
+  maxGuests     Int?
+  // isTemplate    Boolean   @default(false) // For sharing past trips
+  
   // --- Relations ---
   hostId String
   host   User   @relation("HostToTrips", fields: [hostId], references: [id])
 
   rsvps     TripRSVP[] // A trip can have many RSVPs from different users.
-  locations Location[] // Many-to-many with Location (implicit join table).
+  locations Location[] // Many-to-many with Location.
   comments  Comment[]  // Many-to-many
+  coHosts       TripCoHost[] // Multiple hosts per trip
+  polls         Poll[]      
+  guestList     ProposedGuest[] // Proposed guests before RSVP
 }
 
 model Location {
@@ -68,6 +79,9 @@ model Location {
   address       String
   image         String?
   locationTime  String? // Consider using DateTime (?)
+
+  // TODO: add weather data
+  // TODO: add Gmaps data
 
   // --- Relations ---
   trips    Trip[]    // A location can be part of many trips.
@@ -87,10 +101,11 @@ model Comment {
   trip   Trip   @relation(fields: [tripId], references: [id])
 
   // A comment can optionally be about a specific location within the trip.
-  locationId String?
+  locationId String? // TODO: pull from GMaps API
   location   Location? @relation(fields: [locationId], references: [id])
 }
 
+// TODO: use this to populate guestlist, in a way this IS the guestlist, maybe we can rename idk
 model TripRSVP {
   id     String     @id @default(uuid())
   status RSVPStatus
@@ -103,4 +118,71 @@ model TripRSVP {
 
   // A user can only have one RSVP status per trip.
   @@unique([userId, tripId])
+}
+
+model TripCoHost {
+  id     String @id @default(uuid())
+  tripId String
+  userId String
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([tripId, userId])
+}
+
+model ProposedGuest {
+  id     String @id @default(uuid())
+  tripId String
+  email  String
+  name   String?
+  invitedAt DateTime @default(now())
+  
+  // TODO: relate to user ?
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+}
+
+model Poll {
+  id          String @id @default(uuid())
+  tripId      String
+  question    String
+  options     String[] // JSON array of poll options
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  
+  trip        Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  responses   PollResponse[]
+}
+
+model PollResponse {
+  id     String @id @default(uuid())
+  pollId String
+  userId String
+  option String
+  createdAt DateTime @default(now())
+  
+  poll   Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([pollId, userId])
+}
+
+enum TripStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model UserPreferences {
+  id           String @id @default(uuid())
+  userId       String @unique
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  activityPreferences String[]
+  
+  budgetRange  String? // "low", "medium", "high"
+  travelStyle  String[] // ["adventure", "relaxation", "culture", etc.]
+  dietaryRestrictions String[]
+  accessibilityNeeds String[]
+  preferredTransportation String[] //  TODO: circle back to this later
 }

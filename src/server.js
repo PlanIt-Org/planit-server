@@ -67,7 +67,12 @@ app.use((err, req, res, next) => {
 
 // Start the server
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  try {
+    console.log(`Server is running on port ${PORT}`);
+  } catch (err) {
+    console.error("Failed to start server:", err);
+    process.exit(1);
+  }
 });
 
 // Sigint handler for graceful shutdown

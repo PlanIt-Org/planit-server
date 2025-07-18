@@ -17,4 +17,16 @@ router.post("/", tripRSVPController.createTripRSVP);
 // Delete a trip RSVP
 router.delete("/:id", tripRSVPController.deleteTripRSVP);
 
+// Get trip RSVPs
+router.get("/trip/:tripId", tripRSVPController.getTripRSVPs);
+
+// Get trip attendees
+router.get("/trip/:tripId/attendees", tripRSVPController.getTripAttendees);
+
+// Create or update an RSVP
+router.post("/trip/:tripId/rsvp", tripRSVPController.createOrUpdateRSVP);
+
+// Get user RSVPs
+router.get("/user/:userId", tripRSVPController.getUserRSVPs);
+
 module.exports = router;
