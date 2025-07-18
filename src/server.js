@@ -36,9 +36,9 @@ app.use(cors(corsOption));
 app.use(express.json());
 app.use(clerkMiddleware());
 
-// Basic route for testing server status
+// Root route check
 app.get("/", (req, res) => {
-  res.send("API is running...");
+  res.send("Hello World");
 });
 
 // Protected health check route
@@ -52,7 +52,7 @@ app.get("/health", requireAuth(), (req, res) => {
 });
 
 // Mount the routers with authentication
-app.use("/api/users", requireAuth(), userRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/trips", requireAuth(), tripRoutes);
 app.use("/api/locations", requireAuth(), locationRoutes);
 app.use("/api/comments", requireAuth(), commentRoutes);
