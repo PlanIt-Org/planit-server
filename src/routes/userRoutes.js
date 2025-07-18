@@ -31,10 +31,10 @@ router.put("/me", userController.updateCurrentUser);
 router.put("/preferences", userController.updateUserPreferences);
 
 // Get user profile
-router.get("/profile", userController.getUserProfile);
+// router.get("/profile", userController.getUserProfile);
 
 // Update user profile
-router.put("/profile", userController.updateUserProfile);
+// router.put("/profile", userController.updateUserProfile);
 
 // Get user preferences
 router.get("/preferences", userController.getUserPreferences);
