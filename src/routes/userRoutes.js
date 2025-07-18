@@ -6,19 +6,28 @@ const syncUserWithDatabase = require("../middleware/userSync");
 // Apply user sync middleware to all user routes
 router.use(syncUserWithDatabase);
 
+// Get all users - this should be the root route
+router.get("/", userController.getAllUsers);
+
 // Get current user's profile
 router.get("/me", userController.getCurrentUser);
-
-// Update current user's profile
-router.put("/me", userController.updateCurrentUser);
 
 // Get user preferences
 router.get("/preferences", userController.getUserPreferences);
 
-// Update user preferences
-router.put("/preferences", userController.updateUserPreferences);
-
 // Get user past trips
 router.get("/past-trips", userController.getUserPastTrips);
+
+// Get user by ID - this should come AFTER more specific routes
+router.get("/:id", userController.getUserById);
+
+// Create a new user
+router.post("/create", userController.createUser);
+
+// Update current user's profile
+router.put("/me", userController.updateCurrentUser);
+
+// Update user preferences
+router.put("/preferences", userController.updateUserPreferences);
 
 module.exports = router;
