@@ -45,6 +45,13 @@ const locationController = {
       const latitude = geometry.location.lat;
       const longitude = geometry.location.lng; 
 
+      let imageUrl = null;
+      if (photos && photos.length > 0) {
+        const firstPhotoRef = photos[0].photo_reference; 
+        const googleMapsApiKey = process.env.Maps_API_KEY; 
+        imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${firstPhotoRef}&key=${googleMapsApiKey}`;
+      }
+
       const newLocation = await prisma.location.create({
         data: {
           googlePlaceId: place_id,
@@ -52,6 +59,7 @@ const locationController = {
           address: formatted_address, 
           latitude: latitude,
           longitude: longitude,
+          image: imageUrl,
           types: types, 
         },
       });
