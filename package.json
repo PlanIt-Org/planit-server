@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@clerk/backend": "^2.5.0",
-    "@clerk/clerk-js": "^5.74.0",
+    "@clerk/clerk-js": "^5.74.1",
     "@clerk/express": "^1.7.10",
     "@prisma/client": "^6.11.1",
     "axios": "^1.10.0",

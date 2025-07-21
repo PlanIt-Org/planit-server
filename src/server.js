@@ -2,7 +2,6 @@ require("dotenv").config();
 
 const express = require("express");
 const app = express();
-const { clerkMiddleware, requireAuth, getAuth } = require("@clerk/express");
 const morgan = require("morgan");
 const cors = require("cors");
 const fs = require("fs");
@@ -34,7 +33,6 @@ app.use(morgan("combined", { stream: accessLogStream }));
 // Middleware to parse JSON request bodies
 app.use(cors(corsOption));
 app.use(express.json());
-app.use(clerkMiddleware());
 
 // Root route check
 app.get("/", (req, res) => {

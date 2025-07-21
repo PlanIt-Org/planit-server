@@ -1,11 +1,5 @@
 // src/controllers/userController.js
-const { getAuth } = require("@clerk/express");
-const { createClerkClient } = require("@clerk/backend");
 const db = require("../db/db");
-
-const clerkClient = createClerkClient({
-  secretKey: process.env.CLERK_SECRET_KEY,
-});
 
 /**
  * @desc    Get a paginated list of all users.
@@ -15,11 +9,7 @@ const clerkClient = createClerkClient({
 const getAllUsers = async (req, res) => {
   try {
     const { limit = 20, offset = 0, orderBy = "-created_at" } = req.query;
-    const users = await clerkClient.users.getUserList({
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      orderBy,
-    });
+
     res.status(200).json(users);
   } catch (error) {
     console.error("Error fetching all users:", error);
@@ -35,7 +25,6 @@ const getAllUsers = async (req, res) => {
 const getCurrentUser = async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    const user = await clerkClient.users.getUser(userId);
     res.status(200).json(user);
   } catch (error) {
     console.error("Error fetching current user:", error);
@@ -44,14 +33,13 @@ const getCurrentUser = async (req, res) => {
 };
 
 /**
- * @desc    Get a specific user by their Clerk User ID.
+ * @desc    Get a specific user by their User ID.
  * @route   GET /api/users/:id
  * @access  Private
  */
 const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
-    const user = await clerkClient.users.getUser(id);
     res.status(200).json(user);
   } catch (error) {
     console.error(`Error fetching user by ID ${req.params.id}:`, error);
@@ -75,7 +63,6 @@ const createUser = async (req, res) => {
         .status(400)
         .json({ message: "Email address or phone number is required." });
     }
-    const newUser = await clerkClient.users.createUser(userParams);
     res.status(201).json(newUser);
   } catch (error) {
     console.error("Error creating user:", error);
@@ -93,7 +80,6 @@ const updateCurrentUser = async (req, res) => {
   try {
     const { userId } = getAuth(req);
     const updateData = req.body;
-    const updatedUser = await clerkClient.users.updateUser(userId, updateData);
     res.status(200).json(updatedUser);
   } catch (error) {
     console.error("Error updating current user:", error);
@@ -207,14 +193,7 @@ const createUserPreferences = async (req, res) => {
 const updateUserPreferences = async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    // if (!userId) {
-    //   return res
-    //     .status(401)
-    //     .json({ message: "Unauthorized. User not logged in." });
-    // }
-    // const newPreferences = req.body;
-    // TODO: Implement preferences update
-    // const user = await clerkClient.users.getUser(userId);
+
     const {
       age,
       dietary,
