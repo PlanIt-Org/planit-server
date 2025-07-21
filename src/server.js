@@ -9,6 +9,9 @@ const path = require("path");
 const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN;
 
+// Import authentication middleware
+const { protect } = require("./middleware/authMiddleware");
+
 const corsOption = {
   origin: CORS_ORIGIN,
   credentials: true,
@@ -39,23 +42,12 @@ app.get("/", (req, res) => {
   res.send("Hello World");
 });
 
-// Protected health check route
-app.get("/health", requireAuth(), (req, res) => {
-  const { userId } = getAuth(req);
-  res.json({
-    status: "healthy",
-    authenticated: true,
-    userId,
-  });
-});
-
-// Mount the routers with authentication
 app.use("/api/users", userRoutes);
-app.use("/api/trips", requireAuth(), tripRoutes);
-app.use("/api/locations", requireAuth(), locationRoutes);
-app.use("/api/comments", requireAuth(), commentRoutes);
-app.use("/api/rsvps", requireAuth(), tripRSVPRoutes);
-app.use("/api/openrouter", requireAuth(), openRouterRoutes);
+app.use("/api/trips", tripRoutes);
+app.use("/api/locations", locationRoutes);
+app.use("/api/comments", commentRoutes);
+app.use("/api/rsvps", tripRSVPRoutes);
+app.use("/api/openrouter", openRouterRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

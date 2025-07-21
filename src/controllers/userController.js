@@ -4,13 +4,20 @@ const db = require("../db/db");
 /**
  * @desc    Get a paginated list of all users.
  * @route   GET /api/users
- * @access  Private
+ * @access  Private (Admin Only)
  */
 const getAllUsers = async (req, res) => {
   try {
-    const { limit = 20, offset = 0, orderBy = "-created_at" } = req.query;
+    const { page = 1, perPage = 20 } = req.query;
 
-    res.status(200).json(users);
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page: parseInt(page, 10),
+      perPage: parseInt(perPage, 10),
+    });
+
+    if (error) throw error;
+
+    res.status(200).json(data.users);
   } catch (error) {
     console.error("Error fetching all users:", error);
     res.status(500).json({ message: "Failed to retrieve users." });
@@ -23,13 +30,9 @@ const getAllUsers = async (req, res) => {
  * @access  Private
  */
 const getCurrentUser = async (req, res) => {
-  try {
-    const { userId } = getAuth(req);
-    res.status(200).json(user);
-  } catch (error) {
-    console.error("Error fetching current user:", error);
-    res.status(500).json({ message: "Failed to retrieve user profile." });
-  }
+  // The user object is attached to the request by the 'protect' middleware.
+  // It contains the authenticated user's data from the JWT.
+  res.status(200).json(req.user);
 };
 
 /**
@@ -40,12 +43,18 @@ const getCurrentUser = async (req, res) => {
 const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
-    res.status(200).json(user);
+    const { data, error } = await supabase.auth.admin.getUserById(id);
+
+    if (error) {
+      if (error.status === 404) {
+        return res.status(404).json({ message: "User not found." });
+      }
+      throw error;
+    }
+
+    res.status(200).json(data.user);
   } catch (error) {
     console.error(`Error fetching user by ID ${req.params.id}:`, error);
-    if (error.status === 404) {
-      return res.status(404).json({ message: "User not found." });
-    }
     res.status(500).json({ message: "Failed to retrieve user." });
   }
 };
@@ -57,17 +66,29 @@ const getUserById = async (req, res) => {
  */
 const createUser = async (req, res) => {
   try {
-    const userParams = req.body;
-    if (!userParams.emailAddress && !userParams.phoneNumber) {
+    const { email, password, email_confirm = true, user_metadata } = req.body;
+
+    if (!email || !password) {
       return res
         .status(400)
-        .json({ message: "Email address or phone number is required." });
+        .json({ message: "Email and password are required." });
     }
-    res.status(201).json(newUser);
+
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm,
+      user_metadata,
+    });
+
+    if (error) throw error;
+
+    res.status(201).json(data.user);
   } catch (error) {
     console.error("Error creating user:", error);
-    const errors = error.errors || [{ message: "Failed to create user." }];
-    res.status(400).json({ errors });
+    res
+      .status(400)
+      .json({ message: error.message || "Failed to create user." });
   }
 };
 
@@ -78,13 +99,32 @@ const createUser = async (req, res) => {
  */
 const updateCurrentUser = async (req, res) => {
   try {
-    const { userId } = getAuth(req);
-    const updateData = req.body;
-    res.status(200).json(updatedUser);
+    // The user's ID is retrieved from the JWT via the middleware
+    const { id: userId } = req.user;
+    const { password, email, data: user_metadata } = req.body;
+
+    const updatePayload = {};
+    if (password) updatePayload.password = password;
+    if (email) updatePayload.email = email;
+    if (user_metadata) updatePayload.data = user_metadata;
+
+    if (Object.keys(updatePayload).length === 0) {
+      return res.status(400).json({ message: "No update data provided." });
+    }
+
+    const { data, error } = await supabase.auth.admin.updateUserById(
+      userId,
+      updatePayload
+    );
+
+    if (error) throw error;
+
+    res.status(200).json(data.user);
   } catch (error) {
     console.error("Error updating current user:", error);
-    const errors = error.errors || [{ message: "Failed to update user." }];
-    res.status(400).json({ errors });
+    res
+      .status(400)
+      .json({ message: error.message || "Failed to update user." });
   }
 };
 
@@ -184,7 +224,6 @@ const createUserPreferences = async (req, res) => {
   }
 };
 
-// TODO: implement updateUserPreferences
 /**
  * @desc    Update user preferences in public metadata.
  * @route   PUT /api/users/preferences
@@ -192,7 +231,13 @@ const createUserPreferences = async (req, res) => {
  */
 const updateUserPreferences = async (req, res) => {
   try {
-    const { userId } = getAuth(req);
+    // Supabase auth middleware attaches user info to req.user
+    const userId = req.user && req.user.id;
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ message: "Unauthorized. User not logged in." });
+    }
 
     const {
       age,
@@ -205,6 +250,7 @@ const updateUserPreferences = async (req, res) => {
       eventAudience,
       lifestyle,
     } = req.body;
+
     const preferencesData = {
       age: age ? parseInt(age, 10) : null,
       dietaryRestrictions: dietary || [],
@@ -216,6 +262,8 @@ const updateUserPreferences = async (req, res) => {
       typicalAudience: eventAudience || [],
       lifestyleChoices: lifestyle || [],
     };
+
+    // Upsert user preferences in your database
     const updatedPreferences = await db.userPreferences.upsert({
       where: { userId: userId },
       update: preferencesData,
@@ -224,6 +272,7 @@ const updateUserPreferences = async (req, res) => {
         ...preferencesData,
       },
     });
+
     res.status(200).json({
       message: "Preferences updated successfully.",
       preferences: updatedPreferences,
