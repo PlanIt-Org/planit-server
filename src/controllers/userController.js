@@ -1,5 +1,7 @@
+// src/controllers/userController.js
 const { getAuth } = require("@clerk/express");
 const { createClerkClient } = require("@clerk/backend");
+const db = require("../db/db");
 
 const clerkClient = createClerkClient({
   secretKey: process.env.CLERK_SECRET_KEY,
@@ -108,20 +110,95 @@ const updateCurrentUser = async (req, res) => {
 const getUserPreferences = async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    //  const user = await clerkClient.users.getUser(userId);
-    console.log("userId", userId);
-    const preferences = {
-      preferences: {
-        test: "test",
+    // if (!userId) {
+    //   return res
+    //     .status(401)
+    //     .json({ message: "Unauthorized. User not logged in." });
+    // }
+
+    const userPreferences = await db.userPreferences.findUnique({
+      where: {
+        userId: userId,
       },
-    };
-    res.status(200).json(preferences);
+    });
+
+    if (!userPreferences) {
+      return res
+        .status(404)
+        .json({ message: "Preferences not found for this user." });
+    }
+
+    res.status(200).json(userPreferences);
   } catch (error) {
     console.error("Error fetching user preferences:", error);
-    res.status(500).json({ message: "Failed to retrieve preferences." });
+    res.status(500).json({
+      message: "Failed to retrieve preferences due to a server error.",
+    });
   }
 };
 
+/**
+ * @desc    Create new preferences for a user. Fails if preferences already exist.
+ * @route   POST /api/users/preferences
+ * @access  Private (Authenticated users only)
+ */
+const createUserPreferences = async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ message: "Unauthorized. User not logged in." });
+    }
+
+    const {
+      age,
+      dietary,
+      location,
+      activityType,
+      budget,
+      tripLength,
+      planningRole,
+      eventAudience,
+      lifestyle,
+    } = req.body;
+    const preferencesData = {
+      age: age ? parseInt(age, 10) : null,
+      dietaryRestrictions: dietary || [],
+      location: location || null,
+      activityPreferences: activityType || [],
+      budget: budget || null,
+      typicalTripLength: tripLength || null,
+      planningRole: planningRole || null,
+      typicalAudience: eventAudience || [],
+      lifestyleChoices: lifestyle || [],
+    };
+
+    const newPreferences = await db.userPreferences.create({
+      data: {
+        userId: userId,
+        ...preferencesData,
+      },
+    });
+
+    res.status(201).json({
+      message: "Preferences created successfully.",
+      preferences: newPreferences,
+    });
+  } catch (error) {
+    if (error.code === "P2002") {
+      return res.status(409).json({
+        message: "Preferences for this user already exist. Use PUT to update.",
+      });
+    }
+    console.error("Error creating user preferences:", error);
+    res
+      .status(500)
+      .json({ message: "Failed to create preferences due to a server error." });
+  }
+};
+
+// TODO: implement updateUserPreferences
 /**
  * @desc    Update user preferences in public metadata.
  * @route   PUT /api/users/preferences
@@ -130,18 +207,88 @@ const getUserPreferences = async (req, res) => {
 const updateUserPreferences = async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    console.log("userId", userId);
+    // if (!userId) {
+    //   return res
+    //     .status(401)
+    //     .json({ message: "Unauthorized. User not logged in." });
+    // }
     // const newPreferences = req.body;
     // TODO: Implement preferences update
     // const user = await clerkClient.users.getUser(userId);
-
-    res.status(200).json({ message: "Testing update preferences." });
+    const {
+      age,
+      dietary,
+      location,
+      activityType,
+      budget,
+      tripLength,
+      planningRole,
+      eventAudience,
+      lifestyle,
+    } = req.body;
+    const preferencesData = {
+      age: age ? parseInt(age, 10) : null,
+      dietaryRestrictions: dietary || [],
+      location: location || null,
+      activityPreferences: activityType || [],
+      budget: budget || null,
+      typicalTripLength: tripLength || null,
+      planningRole: planningRole || null,
+      typicalAudience: eventAudience || [],
+      lifestyleChoices: lifestyle || [],
+    };
+    const updatedPreferences = await db.userPreferences.upsert({
+      where: { userId: userId },
+      update: preferencesData,
+      create: {
+        userId: userId,
+        ...preferencesData,
+      },
+    });
+    res.status(200).json({
+      message: "Preferences updated successfully.",
+      preferences: updatedPreferences,
+    });
   } catch (error) {
     console.error("Error updating user preferences:", error);
     const errors = error.errors || [
       { message: "Failed to update preferences." },
     ];
     res.status(400).json({ errors });
+  }
+};
+
+/**
+ * @desc    Delete a user's preferences.
+ * @route   DELETE /api/users/preferences
+ * @access  Private (Authenticated users only)
+ */
+const deleteUserPreferences = async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    // if (!userId) {
+    //   return res
+    //     .status(401)
+    //     .json({ message: "Unauthorized. User not logged in." });
+    // }
+
+    await db.userPreferences.delete({
+      where: {
+        userId: userId,
+      },
+    });
+
+    res.status(200).json({ message: "Preferences deleted successfully." });
+  } catch (error) {
+    if (error.code === "P2025") {
+      return res
+        .status(404)
+        .json({ message: "Preferences not found for this user." });
+    }
+    console.error("Error deleting user preferences:", error);
+    res
+      .status(500)
+      .json({ message: "Failed to delete preferences due to a server error." });
   }
 };
 
@@ -177,6 +324,8 @@ module.exports = {
   createUser,
   updateCurrentUser,
   getUserPreferences,
+  deleteUserPreferences,
+  createUserPreferences,
   updateUserPreferences,
   getUserPastTrips,
 };
