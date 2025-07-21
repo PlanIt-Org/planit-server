@@ -1,48 +1,34 @@
+// src/routes/userRoutes.js
 const express = require("express");
 const router = express.Router();
-const userController = require("../controllers/userController");
-const syncUserWithDatabase = require("../middleware/userSync");
+const {
+  getAllUsers,
+  getCurrentUser,
+  getUserById,
+  createUser,
+  updateCurrentUser,
+  getUserPreferences,
+  updateUserPreferences,
+  deleteUserPreferences,
+  getUserPastTrips,
+} = require("../controllers/userController");
 
-// Apply user sync middleware to all user routes
-router.use(syncUserWithDatabase);
+const { protect } = require("../middleware/authMiddleware");
 
-// Get all users - this should be the root route
-router.get("/", userController.getAllUsers);
+router.use(protect);
 
-// Get current user's profile
-router.get("/me", userController.getCurrentUser);
+router.route("/me").get(getCurrentUser).put(updateCurrentUser);
 
-// Get user preferences
-router.get("/preferences", userController.getUserPreferences);
+router
+  .route("/preferences")
+  .get(getUserPreferences)
+  .put(updateUserPreferences)
+  .delete(deleteUserPreferences);
 
-// Get user past trips
-router.get("/past-trips", userController.getUserPastTrips);
+router.get("/past-trips", getUserPastTrips);
 
-// Get user by ID - this should come AFTER more specific routes
-router.get("/:id", userController.getUserById);
+router.route("/").get(getAllUsers).post(createUser);
 
-// Create a new user
-router.post("/create", userController.createUser);
-
-// Update current user's profile
-router.put("/me", userController.updateCurrentUser);
-
-// Update user preferences
-router.put("/preferences", userController.updateUserPreferences);
-
-// Get user profile
-// router.get("/profile", userController.getUserProfile);
-
-// Update user profile
-// router.put("/profile", userController.updateUserProfile);
-
-// Get user preferences
-router.get("/preferences", userController.getUserPreferences);
-
-// Update user preferences
-router.put("/preferences", userController.updateUserPreferences);
-
-// Get user past trips
-router.get("/past-trips", userController.getUserPastTrips);
+router.get("/:id", getUserById);
 
 module.exports = router;

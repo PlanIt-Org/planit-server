@@ -1,7 +1,6 @@
 {
   "name": "planit-server",
   "version": "0.0.1",
-  "type": "module",
   "scripts": {
     "start": "nodemon ./src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -13,9 +12,10 @@
   },
   "dependencies": {
     "@clerk/backend": "^2.5.0",
-    "@clerk/clerk-js": "^5.74.0",
+    "@clerk/clerk-js": "^5.74.1",
     "@clerk/express": "^1.7.10",
     "@prisma/client": "^6.11.1",
+    "@supabase/supabase-js": "^2.52.0",
     "axios": "^1.10.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",

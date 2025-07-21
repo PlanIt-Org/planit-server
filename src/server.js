@@ -1,14 +1,17 @@
-require("dotenv").config();
+const dotenv = require("dotenv");
+dotenv.config();
 
 const express = require("express");
 const app = express();
-const { clerkMiddleware, requireAuth, getAuth } = require("@clerk/express");
 const morgan = require("morgan");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
 const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN;
+
+// Import authentication middleware
+const { protect } = require("./middleware/authMiddleware");
 
 const corsOption = {
   origin: CORS_ORIGIN,
@@ -34,30 +37,18 @@ app.use(morgan("combined", { stream: accessLogStream }));
 // Middleware to parse JSON request bodies
 app.use(cors(corsOption));
 app.use(express.json());
-app.use(clerkMiddleware());
 
 // Root route check
 app.get("/", (req, res) => {
   res.send("Hello World");
 });
 
-// Protected health check route
-app.get("/health", requireAuth(), (req, res) => {
-  const { userId } = getAuth(req);
-  res.json({
-    status: "healthy",
-    authenticated: true,
-    userId,
-  });
-});
-
-// Mount the routers with authentication
 app.use("/api/users", userRoutes);
-app.use("/api/trips", requireAuth(), tripRoutes);
-app.use("/api/locations", requireAuth(), locationRoutes);
-app.use("/api/comments", requireAuth(), commentRoutes);
-app.use("/api/rsvps", requireAuth(), tripRSVPRoutes);
-app.use("/api/openrouter", requireAuth(), openRouterRoutes);
+app.use("/api/trips", tripRoutes);
+app.use("/api/locations", locationRoutes);
+app.use("/api/comments", commentRoutes);
+app.use("/api/rsvps", tripRSVPRoutes);
+app.use("/api/openrouter", openRouterRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
