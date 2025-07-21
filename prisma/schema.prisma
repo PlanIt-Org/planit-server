@@ -73,19 +73,21 @@ model Trip {
 }
 
 model Location {
-  id            String  @id @default(uuid())
-  googlePlaceId String  @unique
-  name          String
-  address       String
-  image         String?
-  locationTime  String? // Consider using DateTime (?)
+  id              String   @id @default(uuid())
+  googlePlaceId   String   @unique
+  name            String
+  address         String   @map("formatted_address")
+  latitude        Float    // Added latitude as Float
+  longitude       Float    // Added longitude as Float
+  image           String? 
+  types           String[] // Added 'types' as String array
 
   // TODO: add weather data
   // TODO: add Gmaps data
 
   // --- Relations ---
-  trips    Trip[]    // A location can be part of many trips.
-  comments Comment[]
+  trips           Trip[]   // A location can be part of many trips.
+  comments        Comment[]
 }
 
 model Comment {
