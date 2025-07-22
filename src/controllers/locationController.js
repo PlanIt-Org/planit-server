@@ -40,6 +40,7 @@ const locationController = {
         formatted_address,
         geometry, 
         types,
+        photos,
       } = req.body;
 
       const latitude = geometry.location.lat;
