@@ -1,5 +1,6 @@
 // src/controllers/userController.js
 const db = require("../db/db");
+const { supabase } = require("../supabaseAdmin.js");
 
 /**
  * @desc    Get a paginated list of all users.
@@ -43,7 +44,10 @@ const getCurrentUser = async (req, res) => {
 const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
-    const { data, error } = await supabase.auth.admin.getUserById(id);
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.admin.getUserById(id);
 
     if (error) {
       if (error.status === 404) {
@@ -60,13 +64,13 @@ const getUserById = async (req, res) => {
 };
 
 /**
- * @desc    Create a new user.
+ * @desc    Create a new user in Supabase and the application database.
  * @route   POST /api/users/create
- * @access  Private
+ * @access  Public // Registration routes should be public
  */
 const createUser = async (req, res) => {
   try {
-    const { email, password, email_confirm = true, user_metadata } = req.body;
+    const { email, password } = req.body;
 
     if (!email || !password) {
       return res
@@ -74,21 +78,51 @@ const createUser = async (req, res) => {
         .json({ message: "Email and password are required." });
     }
 
-    const { data, error } = await supabase.auth.admin.createUser({
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
-      email_confirm,
-      user_metadata,
+      email_confirm: true,
     });
 
-    if (error) throw error;
+    if (authError) {
+      // If Supabase returns an error (e.g., user already exists), forward it.
+      return res
+        .status(authError.status || 400)
+        .json({ message: authError.message });
+    }
 
-    res.status(201).json(data.user);
+    if (!authData.user) {
+      return res
+        .status(500)
+        .json({ message: "Supabase did not return a user object." });
+    }
+
+    const { id: newUserId, email: newUserEmail } = authData.user;
+
+    const newUserProfile = await db.user.create({
+      data: {
+        id: newUserId,
+        email: newUserEmail,
+      },
+    });
+
+    // The frontend will receive this and show the alert message.
+    res.status(201).json(newUserProfile);
   } catch (error) {
     console.error("Error creating user:", error);
+
+    // This catches errors from Prisma (e.g., a unique constraint violation)
+    // or any other unexpected issues.
+    if (error.code === "P2002") {
+      return res.status(409).json({
+        message:
+          "A user with this email or ID already exists in the profile table.",
+      });
+    }
+
     res
-      .status(400)
-      .json({ message: error.message || "Failed to create user." });
+      .status(500)
+      .json({ message: "Failed to create user due to a server error." });
   }
 };
 
@@ -279,10 +313,9 @@ const updateUserPreferences = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating user preferences:", error);
-    const errors = error.errors || [
-      { message: "Failed to update preferences." },
-    ];
-    res.status(400).json({ errors });
+    res
+      .status(400)
+      .json({ message: error.message || "Failed to update preferences." });
   }
 };
 
