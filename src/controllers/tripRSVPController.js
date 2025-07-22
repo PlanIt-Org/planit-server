@@ -1,3 +1,4 @@
+// src/controllers/tripRSVPController.js
 const db = require("../db/db");
 const { supabase } = require("../supabaseAdmin.js");
 
@@ -38,6 +39,7 @@ const tripRSVPController = {
    * @returns {void}
    */
   createOrUpdateRSVP: async (req, res) => {
+    console.log("Attempting RSVP for user:", req.user);
     const userId = req.user && req.user.id;
     if (!userId) {
       return res
@@ -49,21 +51,37 @@ const tripRSVPController = {
       const { tripId } = req.params;
       const { status } = req.body;
 
+      // 1. Check if user and trip actually exist before the upsert
+      const user = await db.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        return res
+          .status(404)
+          .json({ error: "User associated with this token not found." });
+      }
+
+      const trip = await db.trip.findUnique({ where: { id: tripId } });
+      if (!trip) {
+        return res.status(404).json({ error: "Trip not found." });
+      }
+
       if (!status || !["yes", "no", "maybe"].includes(status)) {
         return res.status(400).json({ error: "Invalid status provided." });
       }
 
+      const rsvpStatus = status.toUpperCase();
       const rsvp = await db.tripRSVP.upsert({
         where: {
           userId_tripId: { userId, tripId },
         },
-        update: { status },
-        create: { userId, tripId: parseInt(tripId, 10), status },
+        update: { status: rsvpStatus },
+        create: { userId, tripId, status: rsvpStatus },
       });
 
       res.status(200).json(rsvp);
     } catch (error) {
       console.error("RSVP Error:", error);
+      // The error is now more likely to be a true server error,
+      // as we've handled the expected "not found" cases.
       res.status(500).json({ error: "Failed to create or update RSVP" });
     }
   },
