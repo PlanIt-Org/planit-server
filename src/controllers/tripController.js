@@ -37,6 +37,51 @@ const tripController = {
     }
   },
 
+  getTripsByUserId: async (req, res) => {
+    const { userId } = req.params;
+  
+    try {
+      if (!userId) {
+        return res.status(400).json({ message: "Missing userId in request params." });
+      }
+  
+      const trips = await prisma.trip.findMany({
+        where: {
+          hostId: userId,
+        },
+        include: {
+          host: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          locations: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              image: true,
+            },
+          },
+        },
+      });
+  
+      return res.status(200).json({
+        message: "Trips for user fetched successfully!",
+        trips,
+      });
+  
+    } catch (error) {
+      console.error("Error fetching trips by user ID:", error);
+      return res.status(500).json({
+        message: "Failed to fetch user's trips.",
+        error: error.message,
+      });
+    }
+  },
+
   // Example: Get trip by ID
   getTripById: async (req, res) => {
     // Controller logic here

@@ -23,6 +23,10 @@ router.post("/:id/co-hosts", tripController.addCoHost);
 // Remove co-hosts from a trip
 router.delete("/:id/co-hosts/:userId", tripController.removeCoHost);
 
+// get all trips by user
+router.get("/user/:userId", tripController.getTripsByUserId);
+
+
 // Add proposed guests to a trip
 router.post("/:id/guests", tripController.addProposedGuest);
 
