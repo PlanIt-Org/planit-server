@@ -12,11 +12,17 @@ const {
   deleteUserPreferences,
   getUserPastTrips,
 } = require("../controllers/userController");
-
 const { protect } = require("../middleware/authMiddleware");
 
+// --- Public Routes ---
+router.post("/create", createUser);
+
+// --- Authentication Middleware ---
+// Any route defined BELOW this line will be protected and require a token.
 router.use(protect);
 
+// --- Protected Routes ---
+// Routes for logged-in users.
 router.route("/me").get(getCurrentUser).put(updateCurrentUser);
 
 router
@@ -27,7 +33,7 @@ router
 
 router.get("/past-trips", getUserPastTrips);
 
-router.route("/").get(getAllUsers).post(createUser);
+router.get("/", getAllUsers);
 
 router.get("/:id", getUserById);
 
