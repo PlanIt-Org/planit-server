@@ -26,6 +26,7 @@ CREATE TABLE "Trip" (
     "estimatedTime" DECIMAL(65,30),
     "startTime" TIMESTAMP(3),
     "endTime" TIMESTAMP(3),
+    "city" TEXT NOT NULL,
     "savedImages" TEXT[],
     "status" "TripStatus" NOT NULL DEFAULT 'PLANNING',
     "maxGuests" INTEGER,
@@ -39,9 +40,11 @@ CREATE TABLE "Location" (
     "id" TEXT NOT NULL,
     "googlePlaceId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "address" TEXT NOT NULL,
+    "formatted_address" TEXT NOT NULL,
+    "latitude" DOUBLE PRECISION NOT NULL,
+    "longitude" DOUBLE PRECISION NOT NULL,
     "image" TEXT,
-    "locationTime" TEXT,
+    "types" TEXT[],
 
     CONSTRAINT "Location_pkey" PRIMARY KEY ("id")
 );

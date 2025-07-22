@@ -2,7 +2,39 @@ const prisma = require("../db/db");
 
 const tripController = {
   getAllTrips: async (req, res) => {
-    // Controller logic here
+    try {
+      const trips = await prisma.trip.findMany({
+        include: {
+          host: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          locations: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              image: true,
+            },
+          },
+        },
+      });
+
+      return res.status(200).json({
+        message: "Trips fetched successfully!",
+        trips: trips,
+      });
+
+    } catch (error) {
+      console.error("Error fetching all trips:", error);
+      return res.status(500).json({
+        message: "Failed to fetch trips.",
+        error: error.message,
+      });
+    }
   },
 
   // Example: Get trip by ID
@@ -12,7 +44,59 @@ const tripController = {
 
   // Example: Create a new trip
   createTrip: async (req, res) => {
-    // Controller logic here
+    try {
+      // Extract necessary data from the request body
+      // Ensure these fields are sent from the frontend
+      const { startTime, endTime, hostId, title, description, tripImage, maxGuests, city } = req.body;
+      if (!startTime || !endTime || !hostId) {
+        return res.status(400).json({
+          message: "Missing required fields: startTime, endTime, and hostId.",
+        });
+      }
+
+      const parsedStartTime = new Date(startTime);
+      const parsedEndTime = new Date(endTime);
+
+      // Create the trip in the database
+      const newTrip = await prisma.trip.create({
+        data: {
+          startTime: parsedStartTime,
+          endTime: parsedEndTime,
+          hostId: hostId,
+          title: title || "New Trip",
+          description: description || (city ? `trip to ${city}` : null),
+          tripImage: tripImage,
+          maxGuests: maxGuests, // maxGuests is optional as per your schema (Int?)
+          city: city, // Add the new city field
+
+          // Other fields will take their @default values from the Prisma schema:
+          // id: uuid() - handled by Prisma
+          // inviteLink: cuid() - handled by Prisma
+          // private: true - handled by Prisma
+          // status: PLANNING - handled by Prisma
+          // savedImages: [] - handled by Prisma
+        },
+      });
+
+      // Send a success response
+      return res.status(201).json({
+        message: "Trip created successfully!",
+        trip: newTrip,
+      });
+
+    } catch (error) {
+      console.error("Error creating trip:", error);
+      if (error.code === 'P2002') {
+        return res.status(409).json({
+          message: "A trip with this invite link already exists.",
+          error: error.message,
+        });
+      }
+      return res.status(500).json({
+        message: "Failed to create trip.",
+        error: error.message,
+      });
+    }
   },
 
   // Example: Update a trip
@@ -51,7 +135,6 @@ const tripController = {
       });
 
       res.status(200).json(updatedTrip);
-
     } catch (error) {
       console.error("Error adding location to trip:", error);
       res.status(500).json({ message: "Failed to add location to trip." });
