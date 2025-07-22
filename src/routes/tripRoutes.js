@@ -38,6 +38,9 @@ router.post("/:id/polls", tripController.createPoll);
 // Get polls for a trip
 router.get("/:id/polls", tripController.getTripPolls);
 
+// Add location to trips
+router.post("/:tripId/locations", tripController.addLocationToTrip);
+
 // Vote on a poll
 router.post("/:id/polls/:pollId/vote", tripController.voteOnPoll);
 

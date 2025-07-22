@@ -8,12 +8,73 @@ const locationController = {
 
   // Example: Get location by ID
   getLocationById: async (req, res) => {
-    // Controller logic here
+    try {
+      const { id } = req.params;
+
+      // Attempt to find the location by its Google Place ID first
+      const location = await prisma.location.findUnique({
+        where: {
+          id: id, 
+        },
+      });
+
+      if (!location) {
+        return res.status(404).json({ message: "Location not found." });
+      }
+
+      res.status(200).json(location);
+
+    } catch (error) {
+      console.error("Error getting location by ID:", error);
+      res.status(500).json({ message: "Failed to retrieve location." });
+    }
   },
+
 
   // Example: Create a new location
   createLocation: async (req, res) => {
-    // Controller logic here
+    try {
+      const {
+        place_id,
+        name,
+        formatted_address,
+        geometry, 
+        types,
+      } = req.body;
+
+      const latitude = geometry.location.lat;
+      const longitude = geometry.location.lng; 
+
+      let imageUrl = null;
+      if (photos && photos.length > 0) {
+        const firstPhotoRef = photos[0].photo_reference; 
+        const googleMapsApiKey = process.env.Maps_API_KEY; 
+        imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${firstPhotoRef}&key=${googleMapsApiKey}`;
+      }
+
+      const newLocation = await prisma.location.create({
+        data: {
+          googlePlaceId: place_id,
+          name: name,
+          address: formatted_address, 
+          latitude: latitude,
+          longitude: longitude,
+          image: imageUrl,
+          types: types, 
+        },
+      });
+
+      res.status(201).json(newLocation);
+
+    } catch (error) {
+      console.error("Error creating location:", error);
+
+      if (error.code === 'P2002' && error.meta?.target?.includes('googlePlaceId')) {
+        return res.status(409).json({ message: "Location with this Google Place ID already exists." });
+      }
+
+      res.status(500).json({ message: "Failed to create location." });
+    }
   },
 
   // Example: Update a location
