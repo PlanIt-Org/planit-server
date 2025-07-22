@@ -1,0 +1,208 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+// TODO: initialize local postgres server
+// TODO: run prisma migrate dev
+
+// datasource and generator block
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Enum for RSVP Status
+enum RSVPStatus {
+  YES
+  NO
+  MAYBE
+}
+
+// --- Model Definitions ---
+
+model User {
+  id                  String     @id @unique
+  email               String     @unique
+  name                String?
+  // password            String?     
+  phoneNumber         String?    @unique 
+  activityPreferences String[]
+
+  // --- Relations ---
+  hostedTrips Trip[]     @relation("HostToTrips")
+  rsvps       TripRSVP[] // A user can have many RSVPs to different trips.
+  comments    Comment[]  // One user, many comments
+  coHostedTrips TripCoHost[] // Multiple hosts per trip
+  pollResponses PollResponse[]
+  userPreferences UserPreferences?
+}
+
+model Trip {
+  id            String    @id @default(uuid())
+  title         String
+  description   String?
+  tripImage     String?
+  inviteLink    String    @unique @default(cuid())
+  private       Boolean   @default(true)
+  estimatedTime Decimal?
+  startTime     DateTime? 
+  endTime       DateTime? 
+  city          String
+  savedImages   String[]
+  
+  status        TripStatus @default(PLANNING)
+  maxGuests     Int?
+  // isTemplate    Boolean   @default(false) // For sharing past trips
+  
+  // --- Relations ---
+  hostId String
+  host   User   @relation("HostToTrips", fields: [hostId], references: [id])
+
+  rsvps     TripRSVP[] // A trip can have many RSVPs from different users.
+  locations Location[] // Many-to-many with Location.
+  comments  Comment[]  // Many-to-many
+  coHosts       TripCoHost[] // Multiple hosts per trip
+  polls         Poll[]      
+  guestList     ProposedGuest[] // Proposed guests before RSVP
+}
+
+model Location {
+  id              String   @id @default(uuid())
+  googlePlaceId   String   @unique
+  name            String
+  address         String   @map("formatted_address")
+  latitude        Float    // Added latitude as Float
+  longitude       Float    // Added longitude as Float
+  image           String? 
+  types           String[] // Added 'types' as String array
+
+  // TODO: add weather data
+  // TODO: add Gmaps data
+
+  // --- Relations ---
+  trips           Trip[]   // A location can be part of many trips.
+  comments        Comment[]
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  text      String
+  createdAt DateTime @default(now())
+
+  // --- Relations ---
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  tripId String
+  trip   Trip   @relation(fields: [tripId], references: [id])
+
+  // A comment can optionally be about a specific location within the trip.
+  locationId String? // TODO: pull from GMaps API
+  location   Location? @relation(fields: [locationId], references: [id])
+}
+
+// TODO: use this to populate guestlist, in a way this IS the guestlist, maybe we can rename idk
+model TripRSVP {
+  id     String     @id @default(uuid())
+  status RSVPStatus
+
+  // --- Relations ---
+  userId String
+  tripId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trip   Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  // A user can only have one RSVP status per trip.
+  @@unique([userId, tripId])
+}
+
+model TripCoHost {
+  id     String @id @default(uuid())
+  tripId String
+  userId String
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([tripId, userId])
+}
+
+model ProposedGuest {
+  id     String @id @default(uuid())
+  tripId String
+  email  String
+  name   String?
+  invitedAt DateTime @default(now())
+  
+  // TODO: relate to user ?
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+}
+
+model Poll {
+  id          String @id @default(uuid())
+  tripId      String
+  question    String
+  options     String[] // JSON array of poll options
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  
+  trip        Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  responses   PollResponse[]
+}
+
+model PollResponse {
+  id     String @id @default(uuid())
+  pollId String
+  userId String
+  option String
+  createdAt DateTime @default(now())
+  
+  poll   Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([pollId, userId])
+}
+
+enum TripStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model UserPreferences {
+  id           String @id @default(uuid())
+  userId       String @unique
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)  
+
+  // --- From 'essentials' step ---
+  age                 Int?
+  dietaryRestrictions String[] // Maps from 'dietary' question
+  location            String?
+
+  // --- From 'activities' step ---
+  activityPreferences String[] // Maps from 'activityType' question
+  budget              String?  // Will store "1", "2", "3", or "4"
+
+  // --- From 'planningStyle' step ---
+  typicalTripLength   String?  // Maps from 'tripLength' question
+  planningRole        String?  // Maps from 'planningRole' question
+
+  // --- From 'personal' step ---
+  typicalAudience     String[] // Maps from 'eventAudience' question
+  lifestyleChoices    String[] // Maps from 'lifestyle' question
+
+  // --- Timestamps ---
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // TODO: include this in frontend
+  travelStyle  String[] 
+  accessibilityNeeds String[]
+  preferredTransportation String[] 
+}

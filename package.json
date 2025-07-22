@@ -1,0 +1,36 @@
+{
+  "name": "planit-server",
+  "version": "0.0.1",
+  "scripts": {
+    "start": "nodemon ./src/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon server.js",
+    "seed": "node seed.js",
+    "db:migrate": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@clerk/backend": "^2.5.0",
+    "@clerk/clerk-js": "^5.74.1",
+    "@clerk/express": "^1.7.10",
+    "@prisma/client": "^6.11.1",
+    "@supabase/supabase-js": "^2.52.0",
+    "axios": "^1.10.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0",
+    "morgan": "^1.10.0",
+    "node": "^22.17.0",
+    "nodemon": "^3.1.10",
+    "prisma": "^6.11.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.31.0",
+    "eslint": "^9.31.0",
+    "globals": "^16.3.0"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}
