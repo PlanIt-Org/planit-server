@@ -1,24 +1,23 @@
-const { getAuth } = require("@clerk/express");
-const { createClerkClient } = require("@clerk/backend");
-
-const clerkClient = createClerkClient({
-  secretKey: process.env.CLERK_SECRET_KEY,
-});
+// src/controllers/userController.js
+const db = require("../db/db");
 
 /**
  * @desc    Get a paginated list of all users.
  * @route   GET /api/users
- * @access  Private
+ * @access  Private (Admin Only)
  */
 const getAllUsers = async (req, res) => {
   try {
-    const { limit = 20, offset = 0, orderBy = "-created_at" } = req.query;
-    const users = await clerkClient.users.getUserList({
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      orderBy,
+    const { page = 1, perPage = 20 } = req.query;
+
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page: parseInt(page, 10),
+      perPage: parseInt(perPage, 10),
     });
-    res.status(200).json(users);
+
+    if (error) throw error;
+
+    res.status(200).json(data.users);
   } catch (error) {
     console.error("Error fetching all users:", error);
     res.status(500).json({ message: "Failed to retrieve users." });
@@ -31,31 +30,31 @@ const getAllUsers = async (req, res) => {
  * @access  Private
  */
 const getCurrentUser = async (req, res) => {
-  try {
-    const { userId } = getAuth(req);
-    const user = await clerkClient.users.getUser(userId);
-    res.status(200).json(user);
-  } catch (error) {
-    console.error("Error fetching current user:", error);
-    res.status(500).json({ message: "Failed to retrieve user profile." });
-  }
+  // The user object is attached to the request by the 'protect' middleware.
+  // It contains the authenticated user's data from the JWT.
+  res.status(200).json(req.user);
 };
 
 /**
- * @desc    Get a specific user by their Clerk User ID.
+ * @desc    Get a specific user by their User ID.
  * @route   GET /api/users/:id
  * @access  Private
  */
 const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
-    const user = await clerkClient.users.getUser(id);
-    res.status(200).json(user);
+    const { data, error } = await supabase.auth.admin.getUserById(id);
+
+    if (error) {
+      if (error.status === 404) {
+        return res.status(404).json({ message: "User not found." });
+      }
+      throw error;
+    }
+
+    res.status(200).json(data.user);
   } catch (error) {
     console.error(`Error fetching user by ID ${req.params.id}:`, error);
-    if (error.status === 404) {
-      return res.status(404).json({ message: "User not found." });
-    }
     res.status(500).json({ message: "Failed to retrieve user." });
   }
 };
@@ -67,18 +66,29 @@ const getUserById = async (req, res) => {
  */
 const createUser = async (req, res) => {
   try {
-    const userParams = req.body;
-    if (!userParams.emailAddress && !userParams.phoneNumber) {
+    const { email, password, email_confirm = true, user_metadata } = req.body;
+
+    if (!email || !password) {
       return res
         .status(400)
-        .json({ message: "Email address or phone number is required." });
+        .json({ message: "Email and password are required." });
     }
-    const newUser = await clerkClient.users.createUser(userParams);
-    res.status(201).json(newUser);
+
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm,
+      user_metadata,
+    });
+
+    if (error) throw error;
+
+    res.status(201).json(data.user);
   } catch (error) {
     console.error("Error creating user:", error);
-    const errors = error.errors || [{ message: "Failed to create user." }];
-    res.status(400).json({ errors });
+    res
+      .status(400)
+      .json({ message: error.message || "Failed to create user." });
   }
 };
 
@@ -89,14 +99,32 @@ const createUser = async (req, res) => {
  */
 const updateCurrentUser = async (req, res) => {
   try {
-    const { userId } = getAuth(req);
-    const updateData = req.body;
-    const updatedUser = await clerkClient.users.updateUser(userId, updateData);
-    res.status(200).json(updatedUser);
+    // The user's ID is retrieved from the JWT via the middleware
+    const { id: userId } = req.user;
+    const { password, email, data: user_metadata } = req.body;
+
+    const updatePayload = {};
+    if (password) updatePayload.password = password;
+    if (email) updatePayload.email = email;
+    if (user_metadata) updatePayload.data = user_metadata;
+
+    if (Object.keys(updatePayload).length === 0) {
+      return res.status(400).json({ message: "No update data provided." });
+    }
+
+    const { data, error } = await supabase.auth.admin.updateUserById(
+      userId,
+      updatePayload
+    );
+
+    if (error) throw error;
+
+    res.status(200).json(data.user);
   } catch (error) {
     console.error("Error updating current user:", error);
-    const errors = error.errors || [{ message: "Failed to update user." }];
-    res.status(400).json({ errors });
+    res
+      .status(400)
+      .json({ message: error.message || "Failed to update user." });
   }
 };
 
@@ -108,17 +136,91 @@ const updateCurrentUser = async (req, res) => {
 const getUserPreferences = async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    //  const user = await clerkClient.users.getUser(userId);
-    console.log("userId", userId);
-    const preferences = {
-      preferences: {
-        test: "test",
+    // if (!userId) {
+    //   return res
+    //     .status(401)
+    //     .json({ message: "Unauthorized. User not logged in." });
+    // }
+
+    const userPreferences = await db.userPreferences.findUnique({
+      where: {
+        userId: userId,
       },
-    };
-    res.status(200).json(preferences);
+    });
+
+    if (!userPreferences) {
+      return res
+        .status(404)
+        .json({ message: "Preferences not found for this user." });
+    }
+
+    res.status(200).json(userPreferences);
   } catch (error) {
     console.error("Error fetching user preferences:", error);
-    res.status(500).json({ message: "Failed to retrieve preferences." });
+    res.status(500).json({
+      message: "Failed to retrieve preferences due to a server error.",
+    });
+  }
+};
+
+/**
+ * @desc    Create new preferences for a user. Fails if preferences already exist.
+ * @route   POST /api/users/preferences
+ * @access  Private (Authenticated users only)
+ */
+const createUserPreferences = async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ message: "Unauthorized. User not logged in." });
+    }
+
+    const {
+      age,
+      dietary,
+      location,
+      activityType,
+      budget,
+      tripLength,
+      planningRole,
+      eventAudience,
+      lifestyle,
+    } = req.body;
+    const preferencesData = {
+      age: age ? parseInt(age, 10) : null,
+      dietaryRestrictions: dietary || [],
+      location: location || null,
+      activityPreferences: activityType || [],
+      budget: budget || null,
+      typicalTripLength: tripLength || null,
+      planningRole: planningRole || null,
+      typicalAudience: eventAudience || [],
+      lifestyleChoices: lifestyle || [],
+    };
+
+    const newPreferences = await db.userPreferences.create({
+      data: {
+        userId: userId,
+        ...preferencesData,
+      },
+    });
+
+    res.status(201).json({
+      message: "Preferences created successfully.",
+      preferences: newPreferences,
+    });
+  } catch (error) {
+    if (error.code === "P2002") {
+      return res.status(409).json({
+        message: "Preferences for this user already exist. Use PUT to update.",
+      });
+    }
+    console.error("Error creating user preferences:", error);
+    res
+      .status(500)
+      .json({ message: "Failed to create preferences due to a server error." });
   }
 };
 
@@ -129,19 +231,92 @@ const getUserPreferences = async (req, res) => {
  */
 const updateUserPreferences = async (req, res) => {
   try {
-    const { userId } = getAuth(req);
-    console.log("userId", userId);
-    // const newPreferences = req.body;
-    // TODO: Implement preferences update
-    // const user = await clerkClient.users.getUser(userId);
+    // Supabase auth middleware attaches user info to req.user
+    const userId = req.user && req.user.id;
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ message: "Unauthorized. User not logged in." });
+    }
 
-    res.status(200).json({ message: "Testing update preferences." });
+    const {
+      age,
+      dietary,
+      location,
+      activityType,
+      budget,
+      tripLength,
+      planningRole,
+      eventAudience,
+      lifestyle,
+    } = req.body;
+
+    const preferencesData = {
+      age: age ? parseInt(age, 10) : null,
+      dietaryRestrictions: dietary || [],
+      location: location || null,
+      activityPreferences: activityType || [],
+      budget: budget || null,
+      typicalTripLength: tripLength || null,
+      planningRole: planningRole || null,
+      typicalAudience: eventAudience || [],
+      lifestyleChoices: lifestyle || [],
+    };
+
+    // Upsert user preferences in your database
+    const updatedPreferences = await db.userPreferences.upsert({
+      where: { userId: userId },
+      update: preferencesData,
+      create: {
+        userId: userId,
+        ...preferencesData,
+      },
+    });
+
+    res.status(200).json({
+      message: "Preferences updated successfully.",
+      preferences: updatedPreferences,
+    });
   } catch (error) {
     console.error("Error updating user preferences:", error);
     const errors = error.errors || [
       { message: "Failed to update preferences." },
     ];
     res.status(400).json({ errors });
+  }
+};
+
+/**
+ * @desc    Delete a user's preferences.
+ * @route   DELETE /api/users/preferences
+ * @access  Private (Authenticated users only)
+ */
+const deleteUserPreferences = async (req, res) => {
+  try {
+    const { userId } = getAuth(req);
+    // if (!userId) {
+    //   return res
+    //     .status(401)
+    //     .json({ message: "Unauthorized. User not logged in." });
+    // }
+
+    await db.userPreferences.delete({
+      where: {
+        userId: userId,
+      },
+    });
+
+    res.status(200).json({ message: "Preferences deleted successfully." });
+  } catch (error) {
+    if (error.code === "P2025") {
+      return res
+        .status(404)
+        .json({ message: "Preferences not found for this user." });
+    }
+    console.error("Error deleting user preferences:", error);
+    res
+      .status(500)
+      .json({ message: "Failed to delete preferences due to a server error." });
   }
 };
 
@@ -177,6 +352,8 @@ module.exports = {
   createUser,
   updateCurrentUser,
   getUserPreferences,
+  deleteUserPreferences,
+  createUserPreferences,
   updateUserPreferences,
   getUserPastTrips,
 };

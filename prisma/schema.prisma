@@ -27,11 +27,10 @@ enum RSVPStatus {
 // --- Model Definitions ---
 
 model User {
-  id                  String     @id @default(uuid())
-  clerkId             String     @unique 
+  id                  String     @id @unique
   email               String     @unique
   name                String?
-  password            String     
+  // password            String?     
   phoneNumber         String?    @unique 
   activityPreferences String[]
 
@@ -178,13 +177,31 @@ enum TripStatus {
 model UserPreferences {
   id           String @id @default(uuid())
   userId       String @unique
-  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  activityPreferences String[]
-  
-  budgetRange  String? // "low", "medium", "high"
-  travelStyle  String[] // ["adventure", "relaxation", "culture", etc.]
-  dietaryRestrictions String[]
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)  
+
+  // --- From 'essentials' step ---
+  age                 Int?
+  dietaryRestrictions String[] // Maps from 'dietary' question
+  location            String?
+
+  // --- From 'activities' step ---
+  activityPreferences String[] // Maps from 'activityType' question
+  budget              String?  // Will store "1", "2", "3", or "4"
+
+  // --- From 'planningStyle' step ---
+  typicalTripLength   String?  // Maps from 'tripLength' question
+  planningRole        String?  // Maps from 'planningRole' question
+
+  // --- From 'personal' step ---
+  typicalAudience     String[] // Maps from 'eventAudience' question
+  lifestyleChoices    String[] // Maps from 'lifestyle' question
+
+  // --- Timestamps ---
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // TODO: include this in frontend
+  travelStyle  String[] 
   accessibilityNeeds String[]
-  preferredTransportation String[] //  TODO: circle back to this later
+  preferredTransportation String[] 
 }
