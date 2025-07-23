@@ -49,7 +49,6 @@ model Trip {
   title         String
   description   String?
   tripImage     String?
-  inviteLink    String    @unique @default(cuid())
   private       Boolean   @default(true)
   estimatedTime Decimal?
   startTime     DateTime? 
