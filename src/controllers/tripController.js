@@ -90,8 +90,7 @@ const tripController = {
   // Example: Create a new trip
   createTrip: async (req, res) => {
     try {
-      // Extract necessary data from the request body
-      // Ensure these fields are sent from the frontend
+      // data passed in body
       const { startTime, endTime, hostId, title, description, tripImage, maxGuests, city } = req.body;
       if (!startTime || !endTime || !hostId) {
         return res.status(400).json({
@@ -102,7 +101,6 @@ const tripController = {
       const parsedStartTime = new Date(startTime);
       const parsedEndTime = new Date(endTime);
 
-      // Create the trip in the database
       const newTrip = await prisma.trip.create({
         data: {
           startTime: parsedStartTime,
@@ -111,15 +109,10 @@ const tripController = {
           title: title || "New Trip",
           description: description || (city ? `trip to ${city}` : null),
           tripImage: tripImage,
-          maxGuests: maxGuests, // maxGuests is optional as per your schema (Int?)
-          city: city, // Add the new city field
+          maxGuests: maxGuests, // optional
+          city: city, 
 
-          // Other fields will take their @default values from the Prisma schema:
-          // id: uuid() - handled by Prisma
-          // inviteLink: cuid() - handled by Prisma
-          // private: true - handled by Prisma
-          // status: PLANNING - handled by Prisma
-          // savedImages: [] - handled by Prisma
+         // default values for other values
         },
       });
 
@@ -151,37 +144,65 @@ const tripController = {
 
   addLocationToTrip: async (req, res) => {
     try {
-      const { tripId } = req.params; 
-      const { locationId } = req.body;
+      const { tripId } = req.params;
+      const { locationId, googlePlaceId } = req.body;
   
-      const trip = await prisma.trip.findUnique({ where: { id: tripId } });
+      // check if at least has location id or google place
+      if (!locationId && !googlePlaceId) {
+        return res.status(400).json({ message: "Missing locationId or googlePlaceId." });
+      }
+  
+      // check if trip exists
+      const trip = await prisma.trip.findUnique({
+        where: { id: tripId },
+        include: { locations: true },
+      });
+  
       if (!trip) {
         return res.status(404).json({ message: "Trip not found." });
       }
   
-      const location = await prisma.location.findUnique({ where: { id: locationId } });
+      // try to see if location already exists
+      let location;
+      if (locationId) {
+        location = await prisma.location.findUnique({
+          where: { id: locationId },
+        });
+      } else if (googlePlaceId) {
+        location = await prisma.location.findUnique({
+          where: { googlePlaceId },
+        });
+      }
+  
       if (!location) {
         return res.status(404).json({ message: "Location not found." });
       }
   
+      // if location already added no need to add again
+      const alreadyAdded = trip.locations.some(loc => loc.id === location.id);
+      if (alreadyAdded) {
+        return res.status(409).json({ message: "Location already added to this trip." });
+      }
+  
+      // add location to trip
       const updatedTrip = await prisma.trip.update({
         where: { id: tripId },
         data: {
           locations: {
-            connect: { id: locationId },
+            connect: { id: location.id },
           },
         },
-        include: {
-          locations: true,
-        },
+        include: { locations: true },
       });
   
-      res.status(200).json(updatedTrip);
+      return res.status(200).json(updatedTrip);
+  
     } catch (error) {
       console.error("Error adding location to trip:", error);
-      res.status(500).json({ message: "Failed to add location to trip." });
+      return res.status(500).json({ message: "Failed to add location to trip." });
     }
   },
+  
 
   // Example: Delete a trip
   deleteTrip: async (req, res) => {
@@ -191,10 +212,6 @@ const tripController = {
   // Example: Generate a shareable link for a trip
   generateShareableLink: async (req, res) => {
     // Controller logic here
-    // Check if the trip exists
-    // Generate a new unique invite link
-    // Update the trip with the new invite link
-    // Construct the full shareable URL
   },
 
   getTripByInviteLink: async (req, res) => {
