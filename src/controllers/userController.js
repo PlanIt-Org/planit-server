@@ -162,32 +162,43 @@ const createUser = async (req, res) => {
  */
 const updateCurrentUser = async (req, res) => {
   try {
-    // The user's ID is retrieved from the JWT via the middleware
-    const { id: userId } = req.user;
-    const { password, email, data: user_metadata } = req.body;
+    const userId = req.user?.id;
 
-    const updatePayload = {};
-    if (password) updatePayload.password = password;
-    if (email) updatePayload.email = email;
-    if (user_metadata) updatePayload.data = user_metadata;
-
-    if (Object.keys(updatePayload).length === 0) {
-      return res.status(400).json({ message: "No update data provided." });
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ message: "Authentication error: User ID not found." });
     }
 
-    const { data, error } = await supabase.auth.admin.updateUserById(
+    const { displayName } = req.body;
+    if (
+      !displayName ||
+      typeof displayName !== "string" ||
+      displayName.trim().length < 3
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Invalid display name provided." });
+    }
+
+    const { error: updateError } = await supabase.auth.admin.updateUserById(
       userId,
-      updatePayload
+      {
+        user_metadata: { display_name: displayName.trim() },
+      }
     );
 
-    if (error) throw error;
+    if (updateError) {
+      throw updateError;
+    }
 
-    res.status(200).json(data.user);
+    res.status(200).json({ message: "Display name updated successfully." });
   } catch (error) {
-    console.error("Error updating current user:", error);
-    res
-      .status(400)
-      .json({ message: error.message || "Failed to update user." });
+    console.error("Error updating display name:", error);
+    res.status(500).json({
+      message: "Failed to update display name.",
+      error: error.message,
+    });
   }
 };
 
