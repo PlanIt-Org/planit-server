@@ -181,7 +181,10 @@ const tripController = {
       // if location already added no need to add again
       const alreadyAdded = trip.locations.some(loc => loc.id === location.id);
       if (alreadyAdded) {
-        return res.status(409).json({ message: "Location already added to this trip." });
+        return res.status(200).json({
+          message: "Location already added to this trip.",
+          trip,
+        });
       }
   
       // add location to trip
@@ -206,11 +209,6 @@ const tripController = {
 
   // Example: Delete a trip
   deleteTrip: async (req, res) => {
-    // Controller logic here
-  },
-
-  // Example: Generate a shareable link for a trip
-  generateShareableLink: async (req, res) => {
     // Controller logic here
   },
 
