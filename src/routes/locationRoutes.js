@@ -8,6 +8,10 @@ router.get("/", locationController.getAllLocations);
 // Get location by ID
 router.get("/:id", locationController.getLocationById);
 
+// Get by plce id
+router.get("/by-place-id/:placeId", locationController.getLocationByPlaceId);
+
+
 // Create a new location
 router.post("/", locationController.createLocation);
 
