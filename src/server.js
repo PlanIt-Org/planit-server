@@ -47,7 +47,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/trips", tripRoutes);
 app.use("/api/locations", locationRoutes);
 app.use("/api/comments", commentRoutes);
-app.use("/api/rsvps", tripRSVPRoutes);
+app.use("/api", tripRSVPRoutes);
 app.use("/api/openrouter", openRouterRoutes);
 
 // Global error handler

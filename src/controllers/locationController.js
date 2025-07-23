@@ -11,7 +11,7 @@ const locationController = {
     try {
       const { id } = req.params;
 
-      // Attempt to find the location by its Google Place ID first
+      // find location by id
       const location = await prisma.location.findUnique({
         where: {
           id: id, 
@@ -31,6 +31,29 @@ const locationController = {
   },
 
 
+  getLocationByPlaceId: async (req, res) => {
+    try {
+      const { placeId } = req.params;
+
+  // find location by google maps id
+      const location = await prisma.location.findUnique({
+        where: {
+          googlePlaceId: placeId,
+        },
+      });
+  
+      if (!location) {
+        return res.status(404).json({ message: "Location not found." });
+      }
+  
+      res.status(200).json(location);
+    } catch (error) {
+      console.error("Error fetching location by Google Place ID:", error);
+      res.status(500).json({ message: "Failed to fetch location." });
+    }
+  },
+
+
   // Example: Create a new location
   createLocation: async (req, res) => {
     try {
@@ -38,41 +61,46 @@ const locationController = {
         place_id,
         name,
         formatted_address,
-        geometry, 
+        geometry,
         types,
+        photos,
       } = req.body;
-
+  
       const latitude = geometry.location.lat;
-      const longitude = geometry.location.lng; 
-
+      const longitude = geometry.location.lng;
+  
+      // check if location already exists
+      const existingLocation = await prisma.location.findUnique({
+        where: { googlePlaceId: place_id },
+      });
+  
+      if (existingLocation) {
+        return res.status(200).json(existingLocation);
+      }
+  
+      // get the photo for the location
       let imageUrl = null;
       if (photos && photos.length > 0) {
-        const firstPhotoRef = photos[0].photo_reference; 
-        const googleMapsApiKey = process.env.Maps_API_KEY; 
-        imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${firstPhotoRef}&key=${googleMapsApiKey}`;
+        const photoRef = photos[0].photo_reference;
+        imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photoRef}&key=${process.env.Maps_API_KEY}`;
       }
-
+  
+      // create the location
       const newLocation = await prisma.location.create({
         data: {
           googlePlaceId: place_id,
-          name: name,
-          address: formatted_address, 
-          latitude: latitude,
-          longitude: longitude,
+          name,
+          address: formatted_address,
+          latitude,
+          longitude,
           image: imageUrl,
-          types: types, 
+          types,
         },
       });
-
+  
       res.status(201).json(newLocation);
-
     } catch (error) {
       console.error("Error creating location:", error);
-
-      if (error.code === 'P2002' && error.meta?.target?.includes('googlePlaceId')) {
-        return res.status(409).json({ message: "Location with this Google Place ID already exists." });
-      }
-
       res.status(500).json({ message: "Failed to create location." });
     }
   },

@@ -1,32 +1,28 @@
+// src/routes/tripRSVPRoutes.js
 const express = require("express");
 const router = express.Router();
 const tripRSVPController = require("../controllers/tripRSVPController");
+const { protect } = require("../middleware/authMiddleware");
 
-// Get all trip RSVPs
-router.get("/", tripRSVPController.getAllTripRSVPs);
+// --- Authentication Middleware ---
+// Any route defined BELOW this line will be protected and require a token.
+router.use(protect);
 
-// Get trip RSVP by ID
-router.get("/:id", tripRSVPController.getTripRSVPById);
+// --- Routes for a specific Trip ---
+// These are the most common and useful routes.
 
-// Create a new trip RSVP
-router.post("/", tripRSVPController.createTripRSVP);
+// Get all RSVPs for a specific trip
+router.get("/:tripId", tripRSVPController.getTripRSVPs);
 
-// Update a trip RSVP (uncomment and implement when ready)
-// router.put("/:id", tripRSVPController.updateTripRSVP);
+// Get all attendees (e.g., users who said 'yes') for a trip
+router.get("/:tripId/attendees", tripRSVPController.getTripAttendees);
 
-// Delete a trip RSVP
-router.delete("/:id", tripRSVPController.deleteTripRSVP);
+// Create or update the logged-in user's RSVP for a specific trip
+router.post("/:tripId/rsvp", tripRSVPController.createOrUpdateRSVP);
 
-// Get trip RSVPs
-router.get("/trip/:tripId", tripRSVPController.getTripRSVPs);
+// --- Routes for a specific User ---
 
-// Get trip attendees
-router.get("/trip/:tripId/attendees", tripRSVPController.getTripAttendees);
-
-// Create or update an RSVP
-router.post("/trip/:tripId/rsvp", tripRSVPController.createOrUpdateRSVP);
-
-// Get user RSVPs
+// Get all RSVPs made by a specific user
 router.get("/user/:userId", tripRSVPController.getUserRSVPs);
 
 module.exports = router;

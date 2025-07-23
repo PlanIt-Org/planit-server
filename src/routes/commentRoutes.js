@@ -7,6 +7,8 @@ router.get("/", commentController.getAllComments);
 // Get comment by ID
 router.get("/:id", commentController.getCommentById);
 
+router.get("/trips/:tripId", commentController.getCommentsForTrip);
+
 // Create a new comment
 router.post("/", commentController.createComment);
 
