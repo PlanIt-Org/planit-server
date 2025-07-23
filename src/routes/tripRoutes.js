@@ -39,6 +39,9 @@ router.get("/:id/guests", tripController.getProposedGuests);
 // Create a poll for a trip
 router.post("/:id/polls", tripController.createPoll);
 
+// add invite link to trip
+router.post("/trips/:tripId/invite-link", tripController.addInviteLinkToTrip);
+
 // Get polls for a trip
 router.get("/:id/polls", tripController.getTripPolls);
 

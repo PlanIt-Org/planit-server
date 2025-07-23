@@ -181,7 +181,10 @@ const tripController = {
       // if location already added no need to add again
       const alreadyAdded = trip.locations.some(loc => loc.id === location.id);
       if (alreadyAdded) {
-        return res.status(409).json({ message: "Location already added to this trip." });
+        return res.status(200).json({
+          message: "Location already added to this trip.",
+          trip,
+        });
       }
   
       // add location to trip
@@ -212,6 +215,45 @@ const tripController = {
   // Example: Generate a shareable link for a trip
   generateShareableLink: async (req, res) => {
     // Controller logic here
+  },
+
+
+  addInviteLinkToTrip: async (req, res) => {
+    try {
+      const { tripId } = req.params;
+  
+      if (!tripId) {
+        return res.status(400).json({ message: "Missing tripId in params." });
+      }
+  
+      // if trip exists
+      const trip = await prisma.trip.findUnique({
+        where: { id: tripId },
+      });
+  
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+  
+      const inviteLink = `/tripsummary/${tripId}`;
+  
+      const updatedTrip = await prisma.trip.update({
+        where: { id: tripId },
+        data: {
+          inviteLink,
+        },
+      });
+  
+      return res.status(200).json({
+        message: "Invite link added successfully.",
+        inviteLink,
+        trip: updatedTrip,
+      });
+  
+    } catch (error) {
+      console.error("Error adding invite link:", error);
+      return res.status(500).json({ message: "Failed to add invite link." });
+    }
   },
 
   getTripByInviteLink: async (req, res) => {
