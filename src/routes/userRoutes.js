@@ -11,6 +11,7 @@ const {
   updateUserPreferences,
   deleteUserPreferences,
   getUserPastTrips,
+  searchUsers, 
 } = require("../controllers/userController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -25,6 +26,7 @@ router.use(protect);
 // Routes for logged-in users.
 router.route("/me").get(getCurrentUser).put(updateCurrentUser);
 
+
 router
   .route("/preferences")
   .get(getUserPreferences)
@@ -35,6 +37,10 @@ router.get("/past-trips", getUserPastTrips);
 
 router.get("/", getAllUsers);
 
+router.get("/search", searchUsers)
+
+
 router.get("/:id", getUserById);
+
 
 module.exports = router;
