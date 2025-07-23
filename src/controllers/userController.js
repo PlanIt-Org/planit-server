@@ -26,14 +26,51 @@ const getAllUsers = async (req, res) => {
 };
 
 /**
- * @desc    Get the profile of the currently authenticated user.
+ * @desc    Get the profile of the currently authenticated user from Supabase.
  * @route   GET /api/users/me
  * @access  Private
  */
 const getCurrentUser = async (req, res) => {
-  // The user object is attached to the request by the 'protect' middleware.
-  // It contains the authenticated user's data from the JWT.
-  res.status(200).json(req.user);
+  try {
+    // 1. Get the JWT from the request header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res
+        .status(401)
+        .json({ message: "Authorization token is missing or invalid." });
+    }
+    const token = authHeader.split(" ")[1];
+
+    // 2. Use the token to get the user from Supabase
+    // This validates the token and returns the user data without needing admin rights.
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
+
+    if (error) {
+      // Handles invalid or expired tokens
+      return res.status(401).json({ message: error.message });
+    }
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // 3. Send the user object back to the client
+    res.status(200).json(user);
+    if (error) {
+      if (error.status === 404) {
+        return res.status(404).json({ message: "User not found." });
+      }
+      throw error;
+    }
+
+    res.status(200).json(data.user);
+  } catch (error) {
+    console.error("Error fetching current user:", error);
+    res.status(500).json({ message: "Failed to retrieve current user." });
+  }
 };
 
 /**
