@@ -32,7 +32,6 @@ const getAllUsers = async (req, res) => {
  */
 const getCurrentUser = async (req, res) => {
   try {
-    // 1. Get the JWT from the request header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res
@@ -41,15 +40,12 @@ const getCurrentUser = async (req, res) => {
     }
     const token = authHeader.split(" ")[1];
 
-    // 2. Use the token to get the user from Supabase
-    // This validates the token and returns the user data without needing admin rights.
     const {
       data: { user },
       error,
     } = await supabase.auth.getUser(token);
 
     if (error) {
-      // Handles invalid or expired tokens
       return res.status(401).json({ message: error.message });
     }
 
@@ -57,7 +53,6 @@ const getCurrentUser = async (req, res) => {
       return res.status(404).json({ message: "User not found." });
     }
 
-    // 3. Send the user object back to the client
     res.status(200).json(user);
     if (error) {
       if (error.status === 404) {
@@ -143,13 +138,10 @@ const createUser = async (req, res) => {
       },
     });
 
-    // The frontend will receive this and show the alert message.
     res.status(201).json(newUserProfile);
   } catch (error) {
     console.error("Error creating user:", error);
 
-    // This catches errors from Prisma (e.g., a unique constraint violation)
-    // or any other unexpected issues.
     if (error.code === "P2002") {
       return res.status(409).json({
         message:
