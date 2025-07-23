@@ -12,13 +12,13 @@ router.use(protect);
 // These are the most common and useful routes.
 
 // Get all RSVPs for a specific trip
-router.get("/trip/:tripId", tripRSVPController.getTripRSVPs);
+router.get("/:tripId", tripRSVPController.getTripRSVPs);
 
 // Get all attendees (e.g., users who said 'yes') for a trip
-router.get("/trip/:tripId/attendees", tripRSVPController.getTripAttendees);
+router.get("/:tripId/attendees", tripRSVPController.getTripAttendees);
 
 // Create or update the logged-in user's RSVP for a specific trip
-router.post("/trip/:tripId/rsvp", tripRSVPController.createOrUpdateRSVP);
+router.post("/:tripId/rsvp", tripRSVPController.createOrUpdateRSVP);
 
 // --- Routes for a specific User ---
 
