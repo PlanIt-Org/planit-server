@@ -57,6 +57,8 @@ model Trip {
   savedImages   String[]
   status        TripStatus @default(PLANNING)
   maxGuests     Int?
+  createdAt DateTime @default(now())
+
   // isTemplate    Boolean   @default(false) // For sharing past trips
   
   // --- Relations ---
