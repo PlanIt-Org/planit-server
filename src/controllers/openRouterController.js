@@ -80,7 +80,7 @@ exports.createChatCompletion = async (req, res) => {
 exports.generateText = async (req, res) => {
   // This is a specialized version of createChatCompletion.
   // You would construct the 'messages' array here based on a simpler input.
-  const { prompt, model = "deepseek/deepseek-chat:free" } = req.body;
+  const { prompt, model = "deepseek/deepseek-chat-v3-0324:free" } = req.body;
 
   if (!prompt) {
     return res.status(400).json({ error: "Missing required field: prompt." });
