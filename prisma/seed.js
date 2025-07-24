@@ -16,12 +16,12 @@ async function main() {
   await prisma.user.deleteMany();
   await prisma.location.deleteMany();
 
-  // --- 1. Create Users ---
+  // --- 1. Create Users (Updated to match your screenshot) ---
   console.log('Creating users...');
   const user1 = await prisma.user.create({
     data: {
-      id: 'user_1',
-      email: 'alice@example.com',
+      id: 'd209fde6-fd95-474b-b019-a6cbb475e12d', // From screenshot
+      email: 'bob12345@gmail.com',                 // From screenshot
       name: 'Alice',
       phoneNumber: '1112223333',
     },
@@ -29,25 +29,24 @@ async function main() {
 
   const user2 = await prisma.user.create({
     data: {
-      id: 'user_2',
-      email: 'bob@example.com',
+      id: '43f6f392-4068-468f-a56c-c6233e6dbe0b', // From screenshot
+      email: 'bob@gmail.com',                      // From screenshot
       name: 'Bob',
     },
   });
 
   const user3 = await prisma.user.create({
     data: {
-      id: 'user_3',
-      email: 'charlie@example.com',
+      id: 'e8d60fd5-8f63-440e-86fd-890fc5f9c6aa6', // From screenshot
+      email: 'test@test.com',                      // From screenshot
       name: 'Charlie',
     },
   });
 
-  // ADDED: user4 and user5
   const user4 = await prisma.user.create({
     data: {
-      id: 'user_4',
-      email: 'diana@example.com',
+      id: '029bd684-b0d1-4bd1-9c88-75a480668ca5', // From screenshot
+      email: 'morluindii@gmail.com',               // From screenshot
       name: 'Diana',
       phoneNumber: '4445556666',
     },
@@ -55,9 +54,9 @@ async function main() {
 
   const user5 = await prisma.user.create({
     data: {
-      id: 'user_5',
-      email: 'eve@example.com',
-      name: 'Eve',
+      id: 'c549b0d7-e385-4b6b-976b-a2f7ee5ff04e', // From screenshot
+      email: 'tsibilly@salesforce.com',            // From screenshot
+      name: 'Thomas ',
     },
   });
 
@@ -138,7 +137,7 @@ async function main() {
 
   // --- 4. Create User Preferences for ALL users ---
   console.log('Creating user preferences...');
-  // Preferences for Alice
+  // Preferences for user1 (bob12345@gmail.com)
   await prisma.userPreferences.create({
     data: {
       user: { connect: { id: user1.id } },
@@ -150,7 +149,7 @@ async function main() {
       travelStyle: ['Relaxing', 'Cultural'],
     },
   });
-  // Preferences for Bob
+  // Preferences for user2 (bob@gmail.com)
   await prisma.userPreferences.create({
     data: {
       user: { connect: { id: user2.id } },
@@ -161,7 +160,7 @@ async function main() {
       preferredTransportation: ['Rideshare'],
     },
   });
-  // Preferences for Charlie
+  // Preferences for user3 (test@test.com)
   await prisma.userPreferences.create({
     data: {
       user: { connect: { id: user3.id } },
@@ -172,7 +171,7 @@ async function main() {
       travelStyle: ['Family-Friendly', 'Planned'],
     },
   });
-  // Preferences for Diana
+  // Preferences for user4 (morluindii@gmail.com)
   await prisma.userPreferences.create({
     data: {
       user: { connect: { id: user4.id } },
@@ -183,7 +182,7 @@ async function main() {
       accessibilityNeeds: ['Wheelchair accessible venues'],
     },
   });
-  // Preferences for Eve
+  // Preferences for user5 (tsibilly@salesforce.com)
   await prisma.userPreferences.create({
     data: {
       user: { connect: { id: user5.id } },
