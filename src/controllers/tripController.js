@@ -1,4 +1,55 @@
+// src/controllers/tripController.js
 const prisma = require("../db/db");
+const { getAiCompletion } = require("../services/openRouterService");
+
+const extractAndParseJson = (text) => {
+  // Use a regex to find a JSON block, which might be wrapped in ```json ... ```
+  const jsonRegex = /```json\s*([\s\S]*?)\s*```|({[\s\S]*})/;
+  const match = text.match(jsonRegex);
+
+  if (!match) {
+    console.error(
+      "[extractAndParseJson] No JSON object or code block found in the string."
+    );
+    throw new SyntaxError("No valid JSON found in the AI response.");
+  }
+
+  // The actual JSON content will be in one of the capturing groups
+  const jsonString = match[1] || match[2];
+
+  if (!jsonString) {
+    throw new SyntaxError("Extracted JSON string is empty.");
+  }
+
+  try {
+    return JSON.parse(jsonString);
+  } catch (error) {
+    console.error(
+      "[extractAndParseJson] Failed to parse the extracted JSON string:",
+      jsonString
+    );
+    // Re-throw the original parsing error for the calling function to handle
+    throw error;
+  }
+};
+
+const formatDataForPrompt = (preferences, trips) => {
+  let prompt = "Here is the user's data:\n";
+  prompt += "--- User Preferences ---\n";
+  prompt += JSON.stringify(preferences, null, 2);
+  prompt += "\n\n--- User's Past Trips ---\n";
+  if (trips.length > 0) {
+    const tripSummaries = trips.map((t) => ({
+      title: t.title,
+      city: t.city,
+      description: t.description,
+    }));
+    prompt += JSON.stringify(tripSummaries, null, 2);
+  } else {
+    prompt += "No past trips recorded.\n";
+  }
+  return prompt;
+};
 
 const tripController = {
   getAllTrips: async (req, res) => {
@@ -87,10 +138,8 @@ const tripController = {
     // Controller logic here
   },
 
-  // Example: Create a new trip
   createTrip: async (req, res) => {
     try {
-      // data passed in body
       const {
         startTime,
         endTime,
@@ -118,14 +167,11 @@ const tripController = {
           title: title || "New Trip",
           description: description || (city ? `trip to ${city}` : null),
           tripImage: tripImage,
-          maxGuests: maxGuests, // optional
+          maxGuests: maxGuests,
           city: city,
-
-          // default values for other values
         },
       });
 
-      // Send a success response
       return res.status(201).json({
         message: "Trip created successfully!",
         trip: newTrip,
@@ -155,14 +201,12 @@ const tripController = {
       const { tripId } = req.params;
       const { locationId, googlePlaceId } = req.body;
 
-      // check if at least has location id or google place
       if (!locationId && !googlePlaceId) {
         return res
           .status(400)
           .json({ message: "Missing locationId or googlePlaceId." });
       }
 
-      // check if trip exists
       const trip = await prisma.trip.findUnique({
         where: { id: tripId },
         include: { locations: true },
@@ -172,7 +216,6 @@ const tripController = {
         return res.status(404).json({ message: "Trip not found." });
       }
 
-      // try to see if location already exists
       let location;
       if (locationId) {
         location = await prisma.location.findUnique({
@@ -263,6 +306,153 @@ const tripController = {
       res.status(500).json({ error: "Could not add guests." });
     }
   },
+
+  generateTripSuggestions: async (req, res) => {
+    const { userId } = req.params;
+    const destination = "San Francisco";
+    const { startDate, endDate, ...otherTripInfo } = req.body || {};
+    console.debug(
+      "[generateLocationSuggestions] Called with userId:",
+      userId,
+      "and destination:",
+      destination
+    );
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required." });
+    }
+
+    try {
+      const [userPreferences, pastTrips] = await Promise.all([
+        prisma.userPreferences.findUnique({ where: { userId } }),
+        prisma.trip.findMany({
+          where: { hostId: userId },
+          take: 5,
+          orderBy: { createdAt: "desc" },
+        }),
+      ]);
+
+      if (!userPreferences) {
+        console.warn(
+          "[generateLocationSuggestions] No user preferences found for:",
+          userId
+        );
+        return res.status(404).json({ message: "User preferences not found." });
+      }
+
+      // Build a prompt that includes the user's trip creation info if provided
+      let userDataPrompt = formatDataForPrompt(userPreferences, pastTrips);
+
+      // If destination or other trip info is provided, append it to the prompt for context
+      if (
+        destination ||
+        startDate ||
+        endDate ||
+        Object.keys(otherTripInfo).length > 0
+      ) {
+        let tripContext = "\n\nThe user is currently planning a new trip";
+        if (destination) tripContext += ` to "${destination}"`;
+        if (startDate || endDate) {
+          tripContext += " for the dates";
+          if (startDate) tripContext += ` starting ${startDate}`;
+          if (endDate) tripContext += ` and ending ${endDate}`;
+        }
+        if (Object.keys(otherTripInfo).length > 0) {
+          tripContext += `. Additional trip details: ${JSON.stringify(
+            otherTripInfo
+          )}`;
+        }
+        tripContext +=
+          ". Please tailor your suggestions to be especially relevant to this trip, but still offer a variety of options.";
+        userDataPrompt += tripContext;
+      }
+
+      const systemPrompt = `You are an expert travel recommendation engine. Your task is to suggest 5 unique travel LOCATIONS (NOT CITIES) that perfectly match the user's preferences and travel style, inferred from their past trips and the details of the trip they are currently planning (if provided).
+
+Your response MUST be a single, valid JSON object. Do not include any other text, explanations, or markdown formatting like \`\`\`json. The root of the JSON object must be a key named "locations", which holds an array of 5 location objects.
+
+For each location, provide:
+- "city": The location in "City, Country" format.
+- "description": A compelling 2-sentence summary explaining WHY this place is a great match for the user based on their specific data and, if relevant, the trip they are planning.
+- "best_for": An array of 2-3 keywords describing the vibe (e.g., "Adventure", "Relaxation", "Culture", "Foodie", "Nightlife").
+
+Example of the required JSON structure:
+{
+  "locations": [
+    {
+      "city": "Muir Woods National Monument, Mill Valley, CA",
+      "description": "Given your interest in hiking, Muir Woods is a serene, scenic escape. Its Redwoods and history align with your wishes for peaceful and beautiful environments.",
+      "best_for": ["Culture", "History", "Relaxation"]
+    }
+  ]
+}`;
+
+      const messages = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userDataPrompt },
+      ];
+
+      let aiResponse;
+      try {
+        const model = "mistralai/mistral-7b-instruct:free";
+        console.debug(
+          "[generateLocationSuggestions] Sending request to AI model:",
+          model
+        );
+        aiResponse = await getAiCompletion(messages, model, true);
+      } catch (apiError) {
+        console.error(
+          "[generateLocationSuggestions] AI API call failed:",
+          apiError
+        );
+        return res
+          .status(502)
+          .json({ message: "Failed to get a response from the AI service." });
+      }
+
+      if (!aiResponse?.choices?.[0]?.message?.content) {
+        console.error(
+          "[generateLocationSuggestions] AI response was empty or malformed."
+        );
+        return res
+          .status(500)
+          .json({ message: "AI returned an invalid or empty response." });
+      }
+
+      const rawContent = aiResponse.choices[0].message.content;
+      console.debug(
+        "[generateLocationSuggestions] Raw AI content received:",
+        rawContent
+      );
+
+      let suggestions;
+      try {
+        suggestions = extractAndParseJson(rawContent);
+      } catch (parseError) {
+        console.error(
+          "[generateLocationSuggestions] Failed to parse AI response as JSON.",
+          parseError
+        );
+        console.error("Problematic AI content:", rawContent);
+        return res
+          .status(500)
+          .json({ message: "AI returned data in an unexpected format." });
+      }
+
+      console.info(
+        "[generateLocationSuggestions] Successfully generated suggestions for:",
+        userId
+      );
+      res.status(200).json(suggestions);
+    } catch (error) {
+      console.error(
+        "[generateLocationSuggestions] An unexpected error occurred:",
+        error
+      );
+      res.status(500).json({ message: "An internal server error occurred." });
+    }
+  },
+
   removeProposedGuest: async (req, res) => {
     // TODO: Implement removeProposedGuest logic
     res.status(501).json({ message: "Not implemented yet" });

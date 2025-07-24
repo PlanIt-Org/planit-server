@@ -24,11 +24,10 @@ router.post("/:id/co-hosts", tripController.addCoHost);
 router.delete("/:id/co-hosts/:userId", tripController.removeCoHost);
 
 // Add a guest to the proposed list
-router.post('/:tripId/proposed-guests', tripController.addProposedGuest);
+router.post("/:tripId/proposed-guests", tripController.addProposedGuest);
 
 // get all trips by user
 router.get("/user/:userId", tripController.getTripsByUserId);
-
 
 // Add proposed guests to a trip
 router.post("/:id/guests", tripController.addProposedGuest);
@@ -62,5 +61,7 @@ router.get("/:id/schedule", tripController.getTripSchedule);
 
 // Update trip schedule
 router.put("/:id/schedule", tripController.updateTripSchedule);
+
+router.post("/suggestions/:userId", tripController.generateTripSuggestions);
 
 module.exports = router;
