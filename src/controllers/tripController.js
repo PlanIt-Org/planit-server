@@ -1,4 +1,24 @@
+// src/controllers/tripController.js
 const prisma = require("../db/db");
+const { getAiCompletion } = require("../services/openRouterService");
+
+const formatDataForPrompt = (preferences, trips) => {
+  let prompt = "Here is the user's data:\n";
+  prompt += "--- User Preferences ---\n";
+  prompt += JSON.stringify(preferences, null, 2);
+  prompt += "\n\n--- User's Past Trips ---\n";
+  if (trips.length > 0) {
+    const tripSummaries = trips.map((t) => ({
+      title: t.title,
+      city: t.city,
+      description: t.description,
+    }));
+    prompt += JSON.stringify(tripSummaries, null, 2);
+  } else {
+    prompt += "No past trips recorded.\n";
+  }
+  return prompt;
+};
 
 const tripController = {
   getAllTrips: async (req, res) => {
@@ -87,10 +107,8 @@ const tripController = {
     // Controller logic here
   },
 
-  // Example: Create a new trip
   createTrip: async (req, res) => {
     try {
-      // data passed in body
       const {
         startTime,
         endTime,
@@ -118,14 +136,11 @@ const tripController = {
           title: title || "New Trip",
           description: description || (city ? `trip to ${city}` : null),
           tripImage: tripImage,
-          maxGuests: maxGuests, // optional
+          maxGuests: maxGuests,
           city: city,
-
-          // default values for other values
         },
       });
 
-      // Send a success response
       return res.status(201).json({
         message: "Trip created successfully!",
         trip: newTrip,
@@ -155,14 +170,12 @@ const tripController = {
       const { tripId } = req.params;
       const { locationId, googlePlaceId } = req.body;
 
-      // check if at least has location id or google place
       if (!locationId && !googlePlaceId) {
         return res
           .status(400)
           .json({ message: "Missing locationId or googlePlaceId." });
       }
 
-      // check if trip exists
       const trip = await prisma.trip.findUnique({
         where: { id: tripId },
         include: { locations: true },
@@ -172,7 +185,6 @@ const tripController = {
         return res.status(404).json({ message: "Trip not found." });
       }
 
-      // try to see if location already exists
       let location;
       if (locationId) {
         location = await prisma.location.findUnique({
@@ -263,6 +275,69 @@ const tripController = {
       res.status(500).json({ error: "Could not add guests." });
     }
   },
+
+  generateTripSuggestions: async (req, res) => {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required." });
+    }
+    try {
+      const userPreferences = await prisma.userPreferences.findUnique({
+        where: { userId },
+      });
+
+      const pastTrips = await prisma.trip.findMany({
+        where: { hostId: userId },
+        take: 5,
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (!userPreferences) {
+        return res.status(404).json({
+          message: "User preferences not found. Cannot generate suggestions.",
+        });
+      }
+
+      const userDataPrompt = formatDataForPrompt(userPreferences, pastTrips);
+      const systemPrompt = `You are an expert travel planner. Your task is to generate 5 unique and personalized trip suggestions based on the user's data. For each suggestion, provide a creative title, a brief compelling description (2-3 sentences), the destination city, an estimated duration in days, and a list of 2-3 specific activities with short descriptions. Return the output as a single, valid JSON object with a key named "suggestions" which holds an array of these 5 trip objects. Do not include any other text, explanations, or markdown formatting in your response.
+
+      The JSON structure for each suggestion in the array must be:
+      {
+        "title": "Trip Title",
+        "description": "A brief, compelling description of the trip.",
+        "city": "City, Country",
+        "duration_days": 3,
+        "suggested_activities": [
+          { "name": "Activity Name", "description": "Short description of the activity." },
+          { "name": "Another Activity", "description": "Short description." }
+        ]
+      }`;
+      const messages = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userDataPrompt },
+      ];
+
+      const model = "mistralai/mistral-7b-instruct:free";
+      const aiResponse = await getAiCompletion(messages, model, true);
+
+      const content = aiResponse.choices[0].message.content;
+      const suggestions = JSON.parse(content);
+      res.status(200).json(suggestions);
+    } catch (error) {
+      console.error("Error generating trip suggestions:", error);
+      if (error instanceof SyntaxError) {
+        return res.status(500).json({
+          message: "Failed to parse AI response. The format was invalid.",
+        });
+      }
+      res.status(500).json({
+        message: "Failed to generate trip suggestions.",
+        error: error.message,
+      });
+    }
+  },
+
   removeProposedGuest: async (req, res) => {
     // TODO: Implement removeProposedGuest logic
     res.status(501).json({ message: "Not implemented yet" });
