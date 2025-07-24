@@ -1,3 +1,6 @@
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
+
 // src/controllers/userController.js
 const db = require("../db/db");
 const { supabase } = require("../supabaseAdmin.js");
@@ -425,6 +428,50 @@ const getUserPastTrips = async (req, res) => {
   }
 };
 
+const searchUsers = async (req, res) => {
+  const { by, query } = req.query;
+
+  if (!by || !query) {
+    return res
+      .status(400)
+      .json({ error: "Search type (by) and query are required." });
+  }
+
+  let users = [];
+
+  try {
+    if (by === "name") {
+      users = await prisma.user.findMany({
+        where: {
+          name: {
+            contains: query,
+            mode: "insensitive",
+          },
+        },
+      });
+    } else if (by === "email") {
+      const userByEmail = await prisma.user.findUnique({
+        where: {
+          email: query,
+        },
+      });
+
+      if (userByEmail) {
+        users = [userByEmail];
+      }
+    } else {
+      return res
+        .status(400)
+        .json({ error: 'Invalid search type. Use "name" or "email".' });
+    }
+
+    res.status(200).json(users);
+  } catch (error) {
+    console.error(`Error searching for users by ${by}:`, error);
+    res.status(500).json({ error: "Failed to search for users." });
+  }
+};
+
 const resetPassword = async (req, res) => {
   const { password } = req.body;
   const accessToken = req.headers.authorization?.split(" ")[1];
@@ -488,4 +535,5 @@ module.exports = {
   createUserPreferences,
   updateUserPreferences,
   getUserPastTrips,
+  searchUsers,
 };
