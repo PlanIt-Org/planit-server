@@ -27,7 +27,6 @@ const tripController = {
         message: "Trips fetched successfully!",
         trips: trips,
       });
-
     } catch (error) {
       console.error("Error fetching all trips:", error);
       return res.status(500).json({
@@ -39,12 +38,14 @@ const tripController = {
 
   getTripsByUserId: async (req, res) => {
     const { userId } = req.params;
-  
+
     try {
       if (!userId) {
-        return res.status(400).json({ message: "Missing userId in request params." });
+        return res
+          .status(400)
+          .json({ message: "Missing userId in request params." });
       }
-  
+
       const trips = await prisma.trip.findMany({
         where: {
           hostId: userId,
@@ -67,12 +68,11 @@ const tripController = {
           },
         },
       });
-  
+
       return res.status(200).json({
         message: "Trips for user fetched successfully!",
         trips,
       });
-  
     } catch (error) {
       console.error("Error fetching trips by user ID:", error);
       return res.status(500).json({
@@ -91,7 +91,16 @@ const tripController = {
   createTrip: async (req, res) => {
     try {
       // data passed in body
-      const { startTime, endTime, hostId, title, description, tripImage, maxGuests, city } = req.body;
+      const {
+        startTime,
+        endTime,
+        hostId,
+        title,
+        description,
+        tripImage,
+        maxGuests,
+        city,
+      } = req.body;
       if (!startTime || !endTime || !hostId) {
         return res.status(400).json({
           message: "Missing required fields: startTime, endTime, and hostId.",
@@ -110,9 +119,9 @@ const tripController = {
           description: description || (city ? `trip to ${city}` : null),
           tripImage: tripImage,
           maxGuests: maxGuests, // optional
-          city: city, 
+          city: city,
 
-         // default values for other values
+          // default values for other values
         },
       });
 
@@ -121,10 +130,9 @@ const tripController = {
         message: "Trip created successfully!",
         trip: newTrip,
       });
-
     } catch (error) {
       console.error("Error creating trip:", error);
-      if (error.code === 'P2002') {
+      if (error.code === "P2002") {
         return res.status(409).json({
           message: "A trip with this invite link already exists.",
           error: error.message,
@@ -146,22 +154,24 @@ const tripController = {
     try {
       const { tripId } = req.params;
       const { locationId, googlePlaceId } = req.body;
-  
+
       // check if at least has location id or google place
       if (!locationId && !googlePlaceId) {
-        return res.status(400).json({ message: "Missing locationId or googlePlaceId." });
+        return res
+          .status(400)
+          .json({ message: "Missing locationId or googlePlaceId." });
       }
-  
+
       // check if trip exists
       const trip = await prisma.trip.findUnique({
         where: { id: tripId },
         include: { locations: true },
       });
-  
+
       if (!trip) {
         return res.status(404).json({ message: "Trip not found." });
       }
-  
+
       // try to see if location already exists
       let location;
       if (locationId) {
@@ -173,20 +183,20 @@ const tripController = {
           where: { googlePlaceId },
         });
       }
-  
+
       if (!location) {
         return res.status(404).json({ message: "Location not found." });
       }
-  
+
       // if location already added no need to add again
-      const alreadyAdded = trip.locations.some(loc => loc.id === location.id);
+      const alreadyAdded = trip.locations.some((loc) => loc.id === location.id);
       if (alreadyAdded) {
         return res.status(200).json({
           message: "Location already added to this trip.",
           trip,
         });
       }
-  
+
       // add location to trip
       const updatedTrip = await prisma.trip.update({
         where: { id: tripId },
@@ -197,15 +207,15 @@ const tripController = {
         },
         include: { locations: true },
       });
-  
+
       return res.status(200).json(updatedTrip);
-  
     } catch (error) {
       console.error("Error adding location to trip:", error);
-      return res.status(500).json({ message: "Failed to add location to trip." });
+      return res
+        .status(500)
+        .json({ message: "Failed to add location to trip." });
     }
   },
-  
 
   // Example: Delete a trip
   deleteTrip: async (req, res) => {
@@ -233,8 +243,25 @@ const tripController = {
     // get time information
   },
   addProposedGuest: async (req, res) => {
-    // TODO: Implement addProposedGuest logic
-    res.status(501).json({ message: "Not implemented yet" });
+    try {
+      const { tripId } = req.params;
+      const guestsArray = req.body;
+
+      const guestsWithTripId = guestsArray.map((guest) => ({
+        name: guest.name,
+        email: guest.email,
+        tripId: tripId,
+      }));
+
+      const result = await prisma.proposedGuest.createMany({
+        data: guestsWithTripId,
+      });
+
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("Failed to add proposezz guests:", error);
+      res.status(500).json({ error: "Could not add guests." });
+    }
   },
   removeProposedGuest: async (req, res) => {
     // TODO: Implement removeProposedGuest logic

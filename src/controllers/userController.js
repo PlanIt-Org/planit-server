@@ -415,12 +415,7 @@ const getUserPastTrips = async (req, res) => {
 
 const searchUsers = async (req, res) => {
 
-  // const { userId } = getAuth(req);
-  // if (!userId) {
-  //   return res
-  //     .status(401)
-  //     .json({ message: "Unauthorized. User not logged in." });
-  // }
+
   
   const { by, query } = req.query;
 

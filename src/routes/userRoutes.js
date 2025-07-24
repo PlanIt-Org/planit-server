@@ -11,7 +11,7 @@ const {
   updateUserPreferences,
   deleteUserPreferences,
   getUserPastTrips,
-  searchUsers, 
+  searchUsers,
 } = require("../controllers/userController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -39,8 +39,8 @@ router.get("/", getAllUsers);
 
 router.get("/search", searchUsers)
 
-
 router.get("/:id", getUserById);
+
 
 
 module.exports = router;
