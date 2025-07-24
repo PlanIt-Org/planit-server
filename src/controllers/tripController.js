@@ -309,9 +309,8 @@ const tripController = {
 
   generateTripSuggestions: async (req, res) => {
     const { userId } = req.params;
-    // Accept trip creation info from the request body (e.g., destination, dates, etc.)
-    const { destination, startDate, endDate, ...otherTripInfo } =
-      req.body || {};
+    const destination = "San Francisco";
+    const { startDate, endDate, ...otherTripInfo } = req.body || {};
     console.debug(
       "[generateLocationSuggestions] Called with userId:",
       userId,
@@ -368,21 +367,21 @@ const tripController = {
         userDataPrompt += tripContext;
       }
 
-      const systemPrompt = `You are an expert travel recommendation engine. Your task is to suggest 5 unique travel LOCATIONS (cities) that perfectly match the user's preferences and travel style, inferred from their past trips and the details of the trip they are currently planning (if provided).
+      const systemPrompt = `You are an expert travel recommendation engine. Your task is to suggest 5 unique travel LOCATIONS (NOT CITIES) that perfectly match the user's preferences and travel style, inferred from their past trips and the details of the trip they are currently planning (if provided).
 
 Your response MUST be a single, valid JSON object. Do not include any other text, explanations, or markdown formatting like \`\`\`json. The root of the JSON object must be a key named "locations", which holds an array of 5 location objects.
 
 For each location, provide:
 - "city": The location in "City, Country" format.
-- "description": A compelling 2-sentence summary explaining WHY this city is a great match for the user based on their specific data and, if relevant, the trip they are planning.
+- "description": A compelling 2-sentence summary explaining WHY this place is a great match for the user based on their specific data and, if relevant, the trip they are planning.
 - "best_for": An array of 2-3 keywords describing the vibe (e.g., "Adventure", "Relaxation", "Culture", "Foodie", "Nightlife").
 
 Example of the required JSON structure:
 {
   "locations": [
     {
-      "city": "Kyoto, Japan",
-      "description": "Given your interest in cultural immersion and history, Kyoto offers a serene escape. Its ancient temples and traditional gardens align perfectly with your preference for peaceful and beautiful environments.",
+      "city": "Muir Woods National Monument, Mill Valley, CA",
+      "description": "Given your interest in hiking, Muir Woods is a serene, scenic escape. Its Redwoods and history align with your wishes for peaceful and beautiful environments.",
       "best_for": ["Culture", "History", "Relaxation"]
     }
   ]
