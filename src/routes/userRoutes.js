@@ -11,6 +11,8 @@ const {
   updateUserPreferences,
   deleteUserPreferences,
   getUserPastTrips,
+  resetPassword,
+  logout,
 } = require("../controllers/userController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -30,6 +32,9 @@ router
   .get(getUserPreferences)
   .put(updateUserPreferences)
   .delete(deleteUserPreferences);
+
+router.post("/reset-password", resetPassword);
+router.post("/logout", logout);
 
 router.get("/past-trips", getUserPastTrips);
 

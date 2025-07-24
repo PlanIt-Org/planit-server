@@ -117,7 +117,7 @@ const createUser = async (req, res) => {
     });
 
     if (authError) {
-      // If Supabase returns an error (e.g., user already exists), forward it.
+      console.error("Supabase signUp error:", authError);
       return res
         .status(authError.status || 400)
         .json({ message: authError.message });
@@ -181,6 +181,7 @@ const updateCurrentUser = async (req, res) => {
         .json({ message: "Invalid display name provided." });
     }
 
+    // Update display name in Supabase
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       userId,
       {
@@ -191,6 +192,12 @@ const updateCurrentUser = async (req, res) => {
     if (updateError) {
       throw updateError;
     }
+
+    // Also update the "name" field in the local Prisma User table
+    await db.user.update({
+      where: { id: userId },
+      data: { name: displayName.trim() },
+    });
 
     res.status(200).json({ message: "Display name updated successfully." });
   } catch (error) {
@@ -418,7 +425,59 @@ const getUserPastTrips = async (req, res) => {
   }
 };
 
+const resetPassword = async (req, res) => {
+  const { password } = req.body;
+  const accessToken = req.headers.authorization?.split(" ")[1];
+  if (!accessToken) {
+    return res.status(401).json({ error: "Authorization header is missing." });
+  }
+  if (!password) {
+    return res.status(400).json({ error: "New password is required." });
+  }
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser(accessToken);
+
+  if (userError) {
+    return res.status(401).json({
+      error: "Invalid or expired access token.",
+      details: userError.message,
+    });
+  }
+  const { error: updateError } = await supabase.auth.admin.updateUserById(
+    user.id,
+    { password: password }
+  );
+  if (updateError) {
+    return res.status(500).json({
+      error: "Could not update password.",
+      details: updateError.message,
+    });
+  }
+
+  return res.status(200).json({ message: "Password updated successfully." });
+};
+
+const logout = async (req, res) => {
+  const accessToken = req.headers.authorization?.split(" ")[1];
+  if (!accessToken) {
+    return res.status(200).json({ message: "User is already logged out." });
+  }
+  const { error } = await supabase.auth.signOut(accessToken);
+  if (error) {
+    console.error("Supabase sign out error:", error.message);
+    return res
+      .status(500)
+      .json({ error: "Failed to log out.", details: error.message });
+  }
+
+  return res.status(200).json({ message: "Logged out successfully." });
+};
+
 module.exports = {
+  logout,
+  resetPassword,
   getAllUsers,
   getCurrentUser,
   getUserById,
