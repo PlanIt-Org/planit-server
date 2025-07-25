@@ -138,11 +138,47 @@ const tripController = {
     // Controller logic here
   },
 
+  getTripTimesById: async (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ message: "Trip ID is required." });
+    }
+
+    try {
+      const tripTimes = await prisma.trip.findUnique({
+        where: {
+          id: id,
+        },
+        select: {
+          startTime: true,
+          endTime: true,
+          estimatedTime: true,
+        },
+      });
+
+      if (!tripTimes) {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+
+      return res.status(200).json({
+        message: "Trip times fetched successfully!",
+        data: tripTimes,
+      });
+    } catch (error) {
+      console.error("Error fetching trip times by ID:", error);
+      return res.status(500).json({
+        message: "Failed to fetch trip times.",
+        error: error.message,
+      });
+    }
+  },
+
   createTrip: async (req, res) => {
     try {
       const {
         startTime,
         endTime,
+        estimatedTime,
         hostId,
         title,
         description,
@@ -163,6 +199,7 @@ const tripController = {
         data: {
           startTime: parsedStartTime,
           endTime: parsedEndTime,
+          estimatedTime: estimatedTime || null, 
           hostId: hostId,
           title: title || "New Trip",
           description: description || (city ? `trip to ${city}` : null),
@@ -257,6 +294,52 @@ const tripController = {
       return res
         .status(500)
         .json({ message: "Failed to add location to trip." });
+    }
+  },
+
+
+  updateEstimatedTime: async (req, res) => {
+    const { id } = req.params;
+    const { estimatedTime } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ message: "Trip ID is required." });
+    }
+    if (!estimatedTime) {
+      return res.status(400).json({ message: "Estimated time is required." });
+    }
+
+    try {
+      // Use the helper function to convert the string to a decimal
+      if (estimatedTime === null) {
+        return res.status(400).json({
+          message:
+            "Invalid estimated time format. Expected format like '2 hr 30 min'.",
+        });
+      }
+
+      // Update the trip in the database
+      const updatedTrip = await prisma.trip.update({
+        where: { id: id },
+        data: {
+          estimatedTime: estimatedTime,
+        },
+      });
+
+      return res.status(200).json({
+        message: "Trip estimated time updated successfully!",
+        trip: updatedTrip,
+      });
+    } catch (error) {
+      // This Prisma error code means "record to update not found"
+      if (error.code === "P2025") {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+      console.error("Error updating estimated time:", error);
+      return res.status(500).json({
+        message: "Failed to update estimated time.",
+        error: error.message,
+      });
     }
   },
 
