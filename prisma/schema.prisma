@@ -50,7 +50,7 @@ model Trip {
   description   String?
   tripImage     String?
   private       Boolean   @default(true)
-  estimatedTime Decimal?
+  estimatedTime String?
   startTime     DateTime? 
   endTime       DateTime? 
   city          String

@@ -41,6 +41,10 @@ router.get("/:id/guests", tripController.getProposedGuests);
 // Create a poll for a trip
 router.post("/:id/polls", tripController.createPoll);
 
+// update estimated time
+router.post("/:id/estimated-time", tripController.updateEstimatedTime);
+
+router.get("/:id/estimated-time", tripController.getTripTimesById);
 // Get polls for a trip
 router.get("/:id/polls", tripController.getTripPolls);
 
