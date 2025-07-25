@@ -36,7 +36,8 @@ model User {
 
   // --- Relations ---
   hostedTrips Trip[]     @relation("HostToTrips")
-  // savedTrips  Trip[]
+  savedTrips  Trip[]
+  invitedTrips Trip[]
   rsvps       TripRSVP[] // A user can have many RSVPs to different trips.
   comments    Comment[]  // One user, many comments
   coHostedTrips TripCoHost[] // Multiple hosts per trip
