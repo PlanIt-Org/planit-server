@@ -345,8 +345,28 @@ const tripController = {
 
   // Example: Delete a trip
   deleteTrip: async (req, res) => {
-    // Controller logic here
+    const { id } = req.params;
+  
+    try {
+      const trip = await prisma.trip.findUnique({ where: { id } });
+  
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found" });
+      }
+  
+      if (trip.status !== "PLANNING") {
+        return res.status(403).json({ message: "Only trips in PLANNING can be deleted." });
+      }
+  
+      await prisma.trip.delete({ where: { id } });
+  
+      return res.status(200).json({ message: "Trip deleted successfully" });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Server error deleting trip" });
+    }
   },
+  
 
   getTripByInviteLink: async (req, res) => {
     // Controller logic here
