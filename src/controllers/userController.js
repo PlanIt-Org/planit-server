@@ -1,7 +1,6 @@
 // src/controllers/userController.js
 const db = require("../db/db");
 const { supabase } = require("../supabaseAdmin.js");
-const { protect } = require("../middleware/authMiddleware.js");
 
 /**
  * @desc    Create a new user in Supabase and the application database.
