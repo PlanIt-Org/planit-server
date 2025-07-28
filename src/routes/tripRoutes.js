@@ -46,6 +46,8 @@ router.post("/:id/polls", tripController.createPoll);
 
 router.get("/:id/host", tripController.getTripHostById);
 
+router.put("/:id/status", tripController.updateTripStatus);
+
 // update estimated time
 router.post("/:id/estimated-time", tripController.updateEstimatedTime);
 

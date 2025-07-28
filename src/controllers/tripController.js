@@ -308,6 +308,22 @@ const tripController = {
     // Controller logic here
   },
 
+  updateTripStatus: async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+  
+    try {
+      const updatedTrip = await prisma.trip.update({
+        where: { id },
+        data: { status },
+      });
+      res.json({ trip: updatedTrip });
+    } catch (error) {
+      console.error("Error updating trip status:", error);
+      res.status(500).json({ message: "Failed to update trip status" });
+    }
+  },
+
   addLocationToTrip: async (req, res) => {
     try {
       const { tripId } = req.params;
@@ -429,8 +445,8 @@ const tripController = {
         return res.status(404).json({ message: "Trip not found" });
       }
   
-      if (trip.status !== "PLANNING") {
-        return res.status(403).json({ message: "Only trips in PLANNING can be deleted." });
+      if (trip.status === "COMPLETED") {
+        return res.status(403).json({ message: "Completed trips cannot be deleted." });
       }
   
       await prisma.trip.delete({ where: { id } });
