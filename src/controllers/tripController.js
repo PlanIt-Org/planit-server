@@ -87,6 +87,29 @@ const tripController = {
     }
   },
 
+  getTripHostById: async (req, res) => {
+    const { id } = req.params;
+  
+    try {
+      const trip = await prisma.trip.findUnique({
+        where: { id },
+        select: { hostId: true },
+      });
+  
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+  
+      return res.status(200).json({ hostId: trip.hostId });
+    } catch (error) {
+      console.error("Error fetching trip host by ID:", error);
+      return res.status(500).json({
+        message: "Failed to fetch trip host.",
+        error: error.message,
+      });
+    }
+  },
+
   getTripsByUserId: async (req, res) => {
     const { userId } = req.params;
 
