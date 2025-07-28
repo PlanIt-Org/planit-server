@@ -186,29 +186,45 @@ const tripController = {
         maxGuests,
         city,
       } = req.body;
+  
       if (!startTime || !endTime || !hostId) {
         return res.status(400).json({
           message: "Missing required fields: startTime, endTime, and hostId.",
         });
       }
-
+  
+      // 👉 Count how many PLANNING trips already exist for this host
+      const planningTripsCount = await prisma.trip.count({
+        where: {
+          hostId,
+          status: "PLANNING",
+        },
+      });
+  
+      if (planningTripsCount >= 5) {
+        return res.status(400).json({
+          message: "You can only have up to 5 planning trips.",
+        });
+      }
+  
       const parsedStartTime = new Date(startTime);
       const parsedEndTime = new Date(endTime);
-
+  
       const newTrip = await prisma.trip.create({
         data: {
           startTime: parsedStartTime,
           endTime: parsedEndTime,
-          estimatedTime: estimatedTime || null, 
+          estimatedTime: estimatedTime || null,
           hostId: hostId,
           title: title || "New Trip",
           description: description || (city ? `trip to ${city}` : null),
           tripImage: tripImage,
           maxGuests: maxGuests,
           city: city,
+          status: "PLANNING", // 💡 Explicitly set if not defaulted by schema
         },
       });
-
+  
       return res.status(201).json({
         message: "Trip created successfully!",
         trip: newTrip,
@@ -226,7 +242,7 @@ const tripController = {
         error: error.message,
       });
     }
-  },
+  },  
 
   // Example: Update a trip
   updateTrip: async (req, res) => {
