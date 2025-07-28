@@ -173,6 +173,42 @@ const tripController = {
     }
   },
 
+  getLocationsByTripId: async (req, res) => {
+    try {
+      const { id } = req.params;
+  
+      if (!id) {
+        return res.status(400).json({
+          message: "Missing tripId parameter.",
+        });
+      }
+  
+      const trip = await prisma.trip.findUnique({
+        where: { id },
+        include: {
+          locations: true, // Assuming the relation is named `locations` in your `Trip` model
+        },
+      });
+  
+      if (!trip) {
+        return res.status(404).json({
+          message: "Trip not found.",
+        });
+      }
+  
+      return res.status(200).json({
+        message: "Locations fetched successfully.",
+        locations: trip.locations,
+      });
+    } catch (error) {
+      console.error("Error fetching locations by tripId:", error);
+      return res.status(500).json({
+        message: "Failed to fetch locations.",
+        error: error.message,
+      });
+    }
+  },
+
   createTrip: async (req, res) => {
     try {
       const {
@@ -186,29 +222,45 @@ const tripController = {
         maxGuests,
         city,
       } = req.body;
+  
       if (!startTime || !endTime || !hostId) {
         return res.status(400).json({
           message: "Missing required fields: startTime, endTime, and hostId.",
         });
       }
-
+  
+      // 👉 Count how many PLANNING trips already exist for this host
+      const planningTripsCount = await prisma.trip.count({
+        where: {
+          hostId,
+          status: "PLANNING",
+        },
+      });
+  
+      if (planningTripsCount >= 5) {
+        return res.status(400).json({
+          message: "You can only have up to 5 planning trips.",
+        });
+      }
+  
       const parsedStartTime = new Date(startTime);
       const parsedEndTime = new Date(endTime);
-
+  
       const newTrip = await prisma.trip.create({
         data: {
           startTime: parsedStartTime,
           endTime: parsedEndTime,
-          estimatedTime: estimatedTime || null, 
+          estimatedTime: estimatedTime || null,
           hostId: hostId,
           title: title || "New Trip",
           description: description || (city ? `trip to ${city}` : null),
           tripImage: tripImage,
           maxGuests: maxGuests,
           city: city,
+          status: "PLANNING", // 💡 Explicitly set if not defaulted by schema
         },
       });
-
+  
       return res.status(201).json({
         message: "Trip created successfully!",
         trip: newTrip,
@@ -226,7 +278,7 @@ const tripController = {
         error: error.message,
       });
     }
-  },
+  },  
 
   // Example: Update a trip
   updateTrip: async (req, res) => {
@@ -345,8 +397,28 @@ const tripController = {
 
   // Example: Delete a trip
   deleteTrip: async (req, res) => {
-    // Controller logic here
+    const { id } = req.params;
+  
+    try {
+      const trip = await prisma.trip.findUnique({ where: { id } });
+  
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found" });
+      }
+  
+      if (trip.status !== "PLANNING") {
+        return res.status(403).json({ message: "Only trips in PLANNING can be deleted." });
+      }
+  
+      await prisma.trip.delete({ where: { id } });
+  
+      return res.status(200).json({ message: "Trip deleted successfully" });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Server error deleting trip" });
+    }
   },
+  
 
   getTripByInviteLink: async (req, res) => {
     // Controller logic here

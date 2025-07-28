@@ -10,7 +10,6 @@ CREATE TABLE "User" (
     "email" TEXT NOT NULL,
     "name" TEXT,
     "phoneNumber" TEXT,
-    "activityPreferences" TEXT[],
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -21,15 +20,16 @@ CREATE TABLE "Trip" (
     "title" TEXT NOT NULL,
     "description" TEXT,
     "tripImage" TEXT,
-    "inviteLink" TEXT NOT NULL,
     "private" BOOLEAN NOT NULL DEFAULT true,
-    "estimatedTime" DECIMAL(65,30),
+    "estimatedTime" TEXT,
     "startTime" TIMESTAMP(3),
     "endTime" TIMESTAMP(3),
     "city" TEXT NOT NULL,
+    "cityImage" TEXT,
     "savedImages" TEXT[],
     "status" "TripStatus" NOT NULL DEFAULT 'PLANNING',
     "maxGuests" INTEGER,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "hostId" TEXT NOT NULL,
 
     CONSTRAINT "Trip_pkey" PRIMARY KEY ("id")
@@ -121,7 +121,7 @@ CREATE TABLE "UserPreferences" (
     "age" INTEGER,
     "dietaryRestrictions" TEXT[],
     "location" TEXT,
-    "activityPreferences" TEXT[],
+    "activityPreferences" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "budget" TEXT,
     "typicalTripLength" TEXT,
     "planningRole" TEXT,
@@ -134,6 +134,22 @@ CREATE TABLE "UserPreferences" (
     "preferredTransportation" TEXT[],
 
     CONSTRAINT "UserPreferences_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "_SavedTrips" (
+    "A" TEXT NOT NULL,
+    "B" TEXT NOT NULL,
+
+    CONSTRAINT "_SavedTrips_AB_pkey" PRIMARY KEY ("A","B")
+);
+
+-- CreateTable
+CREATE TABLE "_InvitedTrips" (
+    "A" TEXT NOT NULL,
+    "B" TEXT NOT NULL,
+
+    CONSTRAINT "_InvitedTrips_AB_pkey" PRIMARY KEY ("A","B")
 );
 
 -- CreateTable
@@ -154,9 +170,6 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 CREATE UNIQUE INDEX "User_phoneNumber_key" ON "User"("phoneNumber");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Trip_inviteLink_key" ON "Trip"("inviteLink");
-
--- CreateIndex
 CREATE UNIQUE INDEX "Location_googlePlaceId_key" ON "Location"("googlePlaceId");
 
 -- CreateIndex
@@ -170,6 +183,12 @@ CREATE UNIQUE INDEX "PollResponse_pollId_userId_key" ON "PollResponse"("pollId",
 
 -- CreateIndex
 CREATE UNIQUE INDEX "UserPreferences_userId_key" ON "UserPreferences"("userId");
+
+-- CreateIndex
+CREATE INDEX "_SavedTrips_B_index" ON "_SavedTrips"("B");
+
+-- CreateIndex
+CREATE INDEX "_InvitedTrips_B_index" ON "_InvitedTrips"("B");
 
 -- CreateIndex
 CREATE INDEX "_LocationToTrip_B_index" ON "_LocationToTrip"("B");
@@ -212,6 +231,18 @@ ALTER TABLE "PollResponse" ADD CONSTRAINT "PollResponse_userId_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "UserPreferences" ADD CONSTRAINT "UserPreferences_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_SavedTrips" ADD CONSTRAINT "_SavedTrips_A_fkey" FOREIGN KEY ("A") REFERENCES "Trip"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_SavedTrips" ADD CONSTRAINT "_SavedTrips_B_fkey" FOREIGN KEY ("B") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_InvitedTrips" ADD CONSTRAINT "_InvitedTrips_A_fkey" FOREIGN KEY ("A") REFERENCES "Trip"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_InvitedTrips" ADD CONSTRAINT "_InvitedTrips_B_fkey" FOREIGN KEY ("B") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_LocationToTrip" ADD CONSTRAINT "_LocationToTrip_A_fkey" FOREIGN KEY ("A") REFERENCES "Location"("id") ON DELETE CASCADE ON UPDATE CASCADE;
