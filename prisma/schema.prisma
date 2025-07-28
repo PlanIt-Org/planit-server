@@ -105,7 +105,7 @@ model Comment {
   author   User   @relation(fields: [authorId], references: [id])
 
   tripId String
-  trip   Trip   @relation(fields: [tripId], references: [id])
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
 
   // A comment can optionally be about a specific location within the trip.
   locationId String? // TODO: pull from GMaps API

@@ -87,6 +87,29 @@ const tripController = {
     }
   },
 
+  getTripHostById: async (req, res) => {
+    const { id } = req.params;
+  
+    try {
+      const trip = await prisma.trip.findUnique({
+        where: { id },
+        select: { hostId: true },
+      });
+  
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+  
+      return res.status(200).json({ hostId: trip.hostId });
+    } catch (error) {
+      console.error("Error fetching trip host by ID:", error);
+      return res.status(500).json({
+        message: "Failed to fetch trip host.",
+        error: error.message,
+      });
+    }
+  },
+
   getTripsByUserId: async (req, res) => {
     const { userId } = req.params;
 
@@ -285,6 +308,22 @@ const tripController = {
     // Controller logic here
   },
 
+  updateTripStatus: async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+  
+    try {
+      const updatedTrip = await prisma.trip.update({
+        where: { id },
+        data: { status },
+      });
+      res.json({ trip: updatedTrip });
+    } catch (error) {
+      console.error("Error updating trip status:", error);
+      res.status(500).json({ message: "Failed to update trip status" });
+    }
+  },
+
   addLocationToTrip: async (req, res) => {
     try {
       const { tripId } = req.params;
@@ -406,8 +445,8 @@ const tripController = {
         return res.status(404).json({ message: "Trip not found" });
       }
   
-      if (trip.status !== "PLANNING") {
-        return res.status(403).json({ message: "Only trips in PLANNING can be deleted." });
+      if (trip.status === "COMPLETED") {
+        return res.status(403).json({ message: "Completed trips cannot be deleted." });
       }
   
       await prisma.trip.delete({ where: { id } });
