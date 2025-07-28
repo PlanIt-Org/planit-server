@@ -173,6 +173,42 @@ const tripController = {
     }
   },
 
+  getLocationsByTripId: async (req, res) => {
+    try {
+      const { id } = req.params;
+  
+      if (!id) {
+        return res.status(400).json({
+          message: "Missing tripId parameter.",
+        });
+      }
+  
+      const trip = await prisma.trip.findUnique({
+        where: { id },
+        include: {
+          locations: true, // Assuming the relation is named `locations` in your `Trip` model
+        },
+      });
+  
+      if (!trip) {
+        return res.status(404).json({
+          message: "Trip not found.",
+        });
+      }
+  
+      return res.status(200).json({
+        message: "Locations fetched successfully.",
+        locations: trip.locations,
+      });
+    } catch (error) {
+      console.error("Error fetching locations by tripId:", error);
+      return res.status(500).json({
+        message: "Failed to fetch locations.",
+        error: error.message,
+      });
+    }
+  },
+
   createTrip: async (req, res) => {
     try {
       const {
