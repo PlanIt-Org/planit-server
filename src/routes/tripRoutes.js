@@ -19,9 +19,12 @@ router.delete("/:id", tripController.deleteTrip);
 
 router.get('/:id/locations', tripController.getLocationsByTripId);
 
+router.get("/:id/status", tripController.getTripStatusById),
 
 // Add co-hosts to a trip
 router.post("/:id/co-hosts", tripController.addCoHost);
+
+router.delete("/:id/locations/:locationId", tripController.removeLocation);
 
 // Remove co-hosts from a trip
 router.delete("/:id/co-hosts/:userId", tripController.removeCoHost);

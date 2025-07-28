@@ -110,6 +110,26 @@ const tripController = {
     }
   },
 
+
+  getTripStatusById: async (req, res) => {
+    const { id } = req.params;
+    try {
+      const trip = await prisma.trip.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+  
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+  
+      return res.status(200).json({ data: { status: trip.status } });
+    } catch (error) {
+      console.error("Error fetching trip status:", error);
+      return res.status(500).json({ message: "Failed to fetch trip status." });
+    }
+  },
+
   getTripsByUserId: async (req, res) => {
     const { userId } = req.params;
 
@@ -434,6 +454,27 @@ const tripController = {
     }
   },
 
+
+  removeLocation: async (req, res) => {
+    const { tripId, locationId } = req.params;
+  
+    try {
+      await prisma.trip.update({
+        where: { id: tripId },
+        data: {
+          locations: {
+            disconnect: { googlePlaceId: locationId }, // or use `id: locationId`
+          },
+        },
+      });
+  
+      return res.status(200).json({ message: "Location removed from trip." });
+    } catch (error) {
+      console.error("Error removing location from trip:", error);
+      return res.status(500).json({ message: "Failed to remove location from trip." });
+    }
+  },
+
   // Example: Delete a trip
   deleteTrip: async (req, res) => {
     const { id } = req.params;
@@ -646,6 +687,7 @@ Example of the required JSON structure:
       res.status(500).json({ message: "An internal server error occurred." });
     }
   },
+
 
   removeProposedGuest: async (req, res) => {
     // TODO: Implement removeProposedGuest logic
