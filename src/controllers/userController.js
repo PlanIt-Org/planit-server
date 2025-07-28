@@ -1,9 +1,87 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
-
 // src/controllers/userController.js
 const db = require("../db/db");
 const { supabase } = require("../supabaseAdmin.js");
+
+/**
+ * @desc    Create a new user in Supabase and the application database.
+ * @route   POST /api/users/create
+ * @access  Public // Registration routes should be public
+ */
+const createUser = async (req, res) => {
+  const { email, password, name } = req.body;
+  let newAuthUser = null;
+
+  if (!email || !password) {
+    return res
+      .status(400)
+      .json({ message: "Email and password are required." });
+  }
+
+  try {
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (authError) {
+      throw new Error(authError.message, {
+        cause: { status: authError.status || 400 },
+      });
+    }
+
+    if (!authData.user) {
+      throw new Error("Supabase did not return a user object on signup.");
+    }
+
+    newAuthUser = authData.user;
+
+    // This is the step that might fail, leaving an orphaned auth user.
+    const newUserProfile = await db.user.create({
+      data: {
+        id: newAuthUser.id,
+        email: newAuthUser.email,
+        name: name || null,
+      },
+    });
+
+    res.status(201).json(newUserProfile);
+  } catch (error) {
+    console.error("Error during user creation process:", error);
+
+    if (newAuthUser && newAuthUser.id) {
+      console.log(`Attempting to roll back Supabase user: ${newAuthUser.id}`);
+      const { error: deleteError } = await supabase.auth.admin.deleteUser(
+        newAuthUser.id
+      );
+      if (deleteError) {
+        console.error(
+          "CRITICAL: FAILED TO ROLL BACK SUPABASE USER!",
+          deleteError
+        );
+        return res.status(500).json({
+          message:
+            "Failed to create user profile and could not clean up the auth user. Please contact support.",
+        });
+      }
+    }
+
+    if (error.code === "P2002") {
+      return res
+        .status(409)
+        .json({ message: "A user with this email or ID already exists." });
+    }
+
+    if (error.message.includes("User already registered")) {
+      return res
+        .status(409)
+        .json({ message: "A user with this email already exists." });
+    }
+
+    res.status(error.cause?.status || 500).json({
+      message: error.message || "Failed to create user due to a server error.",
+    });
+  }
+};
 
 /**
  * @desc    Get a paginated list of all users.
@@ -99,62 +177,38 @@ const getUserById = async (req, res) => {
 };
 
 /**
- * @desc    Create a new user in Supabase and the application database.
- * @route   POST /api/users/create
- * @access  Public // Registration routes should be public
+ * @desc    Ensures a user profile exists in the database. Creates it if it doesn't.
+ * @route   POST /api/users/ensure-profile
+ * @access  Private (Requires a valid Supabase JWT)
  */
-const createUser = async (req, res) => {
+const ensureUserProfile = async (req, res) => {
+  const authUser = req.user;
+
+  if (!authUser || !authUser.id || !authUser.email) {
+    return res.status(401).json({ message: "Invalid authentication data." });
+  }
+
   try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Email and password are required." });
-    }
-
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      email_confirm: true,
-    });
-
-    if (authError) {
-      console.error("Supabase signUp error:", authError);
-      return res
-        .status(authError.status || 400)
-        .json({ message: authError.message });
-    }
-
-    if (!authData.user) {
-      return res
-        .status(500)
-        .json({ message: "Supabase did not return a user object." });
-    }
-
-    const { id: newUserId, email: newUserEmail } = authData.user;
-
-    const newUserProfile = await db.user.create({
-      data: {
-        id: newUserId,
-        email: newUserEmail,
+    const userProfile = await db.user.upsert({
+      where: { id: authUser.id },
+      update: {},
+      create: {
+        id: authUser.id,
+        email: authUser.email,
+        // TODO: need to adjust this based on what Supabase provides.
+        name:
+          authUser.user_metadata?.full_name ||
+          authUser.user_metadata?.name ||
+          null,
       },
     });
 
-    res.status(201).json(newUserProfile);
-  } catch (error) {
-    console.error("Error creating user:", error);
-
-    if (error.code === "P2002") {
-      return res.status(409).json({
-        message:
-          "A user with this email or ID already exists in the profile table.",
-      });
-    }
-
     res
-      .status(500)
-      .json({ message: "Failed to create user due to a server error." });
+      .status(200)
+      .json({ message: "User profile ensured.", profile: userProfile });
+  } catch (error) {
+    console.error("Error in ensureUserProfile:", error);
+    res.status(500).json({ message: "Failed to ensure user profile." });
   }
 };
 
@@ -441,7 +495,7 @@ const searchUsers = async (req, res) => {
 
   try {
     if (by === "name") {
-      users = await prisma.user.findMany({
+      users = await db.user.findMany({
         where: {
           name: {
             contains: query,
@@ -450,7 +504,7 @@ const searchUsers = async (req, res) => {
         },
       });
     } else if (by === "email") {
-      const userByEmail = await prisma.user.findUnique({
+      const userByEmail = await db.user.findUnique({
         where: {
           email: query,
         },
@@ -529,6 +583,7 @@ module.exports = {
   getCurrentUser,
   getUserById,
   createUser,
+  ensureUserProfile,
   updateCurrentUser,
   getUserPreferences,
   deleteUserPreferences,
