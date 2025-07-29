@@ -1,40 +1,42 @@
+// src/middleware/authMiddleware.js
 const { supabase } = require("../supabaseAdmin.js");
 
 const protect = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
+  console.log("\n--- Running Protect Middleware ---");
 
+  const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    console.log("Middleware Error: No Authorization header found.");
     return res
       .status(401)
-      .json({ message: "Unauthorized: No token provided or invalid format." });
+      .json({ message: "Unauthorized: No token provided." });
   }
 
   const token = authHeader.split(" ")[1];
+  console.log("Middleware: Token found, attempting validation...");
 
-  try {
-    // Verify the token
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser(token);
+  const { data, error } = await supabase.auth.getUser(token);
 
-    if (error) {
-      console.error("Token validation error:", error.message);
-      return res
-        .status(401)
-        .json({ message: `Unauthorized: ${error.message}` });
-    }
-
-    if (!user) {
-      return res.status(401).json({ message: "Unauthorized: Invalid token." });
-    }
-
-    req.user = user;
-    next();
-  } catch (err) {
-    console.error("Server error during token validation:", err);
-    res.status(500).json({ message: "Server error during token validation." });
+  if (error) {
+    console.error(
+      "Middleware Error: Supabase returned an error during token validation."
+    );
+    console.error("Error Details:", error.message);
+    return res.status(401).json({ message: `Unauthorized: ${error.message}` });
   }
+
+  if (!data || !data.user) {
+    console.error(
+      "Middleware Error: Token is valid, but no user data was returned."
+    );
+    return res.status(401).json({ message: "Unauthorized: Invalid token." });
+  }
+
+  console.log(
+    `Middleware Success: Token validated for user ID: ${data.user.id}`
+  );
+  req.user = data.user;
+  next();
 };
 
 module.exports = { protect };

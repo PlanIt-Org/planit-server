@@ -14,6 +14,7 @@ const {
   resetPassword,
   logout,
   searchUsers,
+  ensureUserProfile,
 } = require("../controllers/userController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -23,6 +24,8 @@ router.post("/create", createUser);
 // --- Authentication Middleware ---
 // Any route defined BELOW this line will be protected and require a token.
 router.use(protect);
+
+router.post("/ensure-profile", ensureUserProfile);
 
 // --- Protected Routes ---
 // Routes for logged-in users.
