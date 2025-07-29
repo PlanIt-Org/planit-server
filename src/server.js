@@ -56,7 +56,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/trips", tripRoutes);
 app.use("/api/locations", locationRoutes);
 app.use("/api/comments", commentRoutes);
-app.use("/api", tripRSVPRoutes);
+app.use("/api/trip", tripRSVPRoutes);
 app.use("/api/openrouter", openRouterRoutes);
 
 app.use((err, req, res, next) => {
