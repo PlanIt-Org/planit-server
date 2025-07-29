@@ -2,6 +2,12 @@
 const prisma = require("../db/db");
 const { getAiCompletion } = require("../services/openRouterService");
 
+const getAuth = (req) => {
+  return {
+    userId: req.user?.id || null,
+  };
+};
+
 const extractAndParseJson = (text) => {
   // Use a regex to find a JSON block, which might be wrapped in ```json ... ```
   const jsonRegex = /```json\s*([\s\S]*?)\s*```|({[\s\S]*})/;
@@ -251,13 +257,47 @@ const tripController = {
     }
   },
 
+  /**
+   * Creates a new trip for the authenticated user.
+   *
+   * @async
+   * @function createTrip
+   * @param {import('express').Request} req - Express request object, expects authenticated user and trip details in body.
+   * @param {import('express').Response} res - Express response object.
+   * @returns {Promise<void>} Responds with the created trip or an error message.
+   *
+   * Request body fields:
+   *   - startTime {string|Date} (required)
+   *   - endTime {string|Date} (required)
+   *   - estimatedTime {string|Date} (optional)
+   *   - title {string} (optional)
+   *   - description {string} (optional)
+   *   - tripImage {string} (optional)
+   *   - maxGuests {number} (optional)
+   *   - city {string} (optional)
+   *
+   */
   createTrip: async (req, res) => {
     try {
+      console.log("createTrip: Starting trip creation...");
+
+      // Get user ID from the authenticated request
+      const userId = req.user?.id;
+
+      if (!userId) {
+        console.error("createTrip: No user ID found in request");
+        return res.status(401).json({
+          message: "Authentication error: User ID not found.",
+        });
+      }
+
+      console.log(`createTrip: Creating trip for user ${userId}`);
+
       const {
         startTime,
         endTime,
         estimatedTime,
-        hostId,
+        // hostId, // Ignore hostId from frontend, always use authenticated user
         title,
         description,
         tripImage,
@@ -265,16 +305,16 @@ const tripController = {
         city,
       } = req.body;
 
-      if (!startTime || !endTime || !hostId) {
+      if (!startTime || !endTime) {
         return res.status(400).json({
-          message: "Missing required fields: startTime, endTime, and hostId.",
+          message: "Missing required fields: startTime and endTime.",
         });
       }
 
-      // 👉 Count how many PLANNING trips already exist for this host
+      // Count how many PLANNING trips already exist for this host
       const planningTripsCount = await prisma.trip.count({
         where: {
-          hostId,
+          hostId: userId,
           status: "PLANNING",
         },
       });
@@ -293,13 +333,22 @@ const tripController = {
           startTime: parsedStartTime,
           endTime: parsedEndTime,
           estimatedTime: estimatedTime || null,
-          hostId: hostId,
+          hostId: userId, // Use authenticated user ID
           title: title || "New Trip",
-          description: description || (city ? `trip to ${city}` : null),
-          tripImage: tripImage,
-          maxGuests: maxGuests,
-          city: city,
-          status: "PLANNING", // 💡 Explicitly set if not defaulted by schema
+          description: description || (city ? `Trip to ${city}` : "New trip"),
+          tripImage: tripImage || null,
+          maxGuests: maxGuests || null,
+          city: city || null,
+          status: "PLANNING",
+        },
+        include: {
+          host: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
         },
       });
 
@@ -309,12 +358,14 @@ const tripController = {
       });
     } catch (error) {
       console.error("Error creating trip:", error);
+
       if (error.code === "P2002") {
         return res.status(409).json({
-          message: "A trip with this invite link already exists.",
+          message: "A trip with this data already exists.",
           error: error.message,
         });
       }
+
       return res.status(500).json({
         message: "Failed to create trip.",
         error: error.message,
@@ -330,6 +381,13 @@ const tripController = {
   updateTripStatus: async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Authentication error: User ID not found.",
+      });
+    }
 
     try {
       const updatedTrip = await prisma.trip.update({
@@ -505,13 +563,28 @@ const tripController = {
 
   // Example: Delete a trip
   deleteTrip: async (req, res) => {
-    const { id } = req.params;
-
     try {
+      const { id } = req.params;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: "Authentication error: User ID not found.",
+        });
+      }
+
+      console.log(`deleteTrip: User ${userId} attempting to delete trip ${id}`);
+
       const trip = await prisma.trip.findUnique({ where: { id } });
 
       if (!trip) {
         return res.status(404).json({ message: "Trip not found" });
+      }
+
+      if (trip.hostId !== userId) {
+        return res.status(403).json({
+          message: "You can only delete trips you created.",
+        });
       }
 
       if (trip.status === "COMPLETED") {
@@ -522,9 +595,11 @@ const tripController = {
 
       await prisma.trip.delete({ where: { id } });
 
+      console.log(`deleteTrip: Successfully deleted trip ${id}`);
+
       return res.status(200).json({ message: "Trip deleted successfully" });
     } catch (error) {
-      console.error(error);
+      console.error("Error deleting trip:", error);
       return res.status(500).json({ message: "Server error deleting trip" });
     }
   },
