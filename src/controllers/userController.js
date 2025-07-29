@@ -1,9 +1,93 @@
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
-
 // src/controllers/userController.js
 const db = require("../db/db");
 const { supabase } = require("../supabaseAdmin.js");
+
+const getAuth = (req) => {
+  return {
+    userId: req.user?.id || null,
+  };
+};
+
+/**
+ * @desc    Create a new user in Supabase and the application database.
+ * @route   POST /api/users/create
+ * @access  Public // Registration routes should be public
+ */
+const createUser = async (req, res) => {
+  const { email, password, name } = req.body;
+  let newAuthUser = null;
+
+  if (!email || !password) {
+    return res
+      .status(400)
+      .json({ message: "Email and password are required." });
+  }
+
+  try {
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (authError) {
+      throw new Error(authError.message, {
+        cause: { status: authError.status || 400 },
+      });
+    }
+
+    if (!authData.user) {
+      throw new Error("Supabase did not return a user object on signup.");
+    }
+
+    newAuthUser = authData.user;
+
+    // This is the step that might fail, leaving an orphaned auth user.
+    const newUserProfile = await db.user.create({
+      data: {
+        id: newAuthUser.id,
+        email: newAuthUser.email,
+        name: name || null,
+      },
+    });
+
+    res.status(201).json(newUserProfile);
+  } catch (error) {
+    console.error("Error during user creation process:", error);
+
+    if (newAuthUser && newAuthUser.id) {
+      console.log(`Attempting to roll back Supabase user: ${newAuthUser.id}`);
+      const { error: deleteError } = await supabase.auth.admin.deleteUser(
+        newAuthUser.id
+      );
+      if (deleteError) {
+        console.error(
+          "CRITICAL: FAILED TO ROLL BACK SUPABASE USER!",
+          deleteError
+        );
+        return res.status(500).json({
+          message:
+            "Failed to create user profile and could not clean up the auth user. Please contact support.",
+        });
+      }
+    }
+
+    if (error.code === "P2002") {
+      return res
+        .status(409)
+        .json({ message: "A user with this email or ID already exists." });
+    }
+
+    if (error.message.includes("User already registered")) {
+      return res
+        .status(409)
+        .json({ message: "A user with this email already exists." });
+    }
+
+    res.status(error.cause?.status || 500).json({
+      message: error.message || "Failed to create user due to a server error.",
+    });
+  }
+};
 
 /**
  * @desc    Get a paginated list of all users.
@@ -35,36 +119,13 @@ const getAllUsers = async (req, res) => {
  */
 const getCurrentUser = async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res
-        .status(401)
-        .json({ message: "Authorization token is missing or invalid." });
-    }
-    const token = authHeader.split(" ")[1];
-
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser(token);
-
-    if (error) {
-      return res.status(401).json({ message: error.message });
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({
+        message: "Authentication error: User not found in request.",
+      });
     }
 
-    if (!user) {
-      return res.status(404).json({ message: "User not found." });
-    }
-
-    res.status(200).json(user);
-    if (error) {
-      if (error.status === 404) {
-        return res.status(404).json({ message: "User not found." });
-      }
-      throw error;
-    }
-
-    res.status(200).json(data.user);
+    res.status(200).json(req.user);
   } catch (error) {
     console.error("Error fetching current user:", error);
     res.status(500).json({ message: "Failed to retrieve current user." });
@@ -99,62 +160,77 @@ const getUserById = async (req, res) => {
 };
 
 /**
- * @desc    Create a new user in Supabase and the application database.
- * @route   POST /api/users/create
- * @access  Public // Registration routes should be public
+ * @desc    Ensures a user profile exists in the database. Creates it if it doesn't.
+ * @route   POST /api/users/ensure-profile
+ * @access  Private (Requires a valid Supabase JWT)
  */
-const createUser = async (req, res) => {
+const ensureUserProfile = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    console.log("ensureUserProfile: Starting...");
 
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Email and password are required." });
-    }
+    // The protect middleware should have set req.user
+    const authUser = req.user;
+    console.log(
+      "ensureUserProfile: authUser from middleware:",
+      authUser ? "exists" : "missing"
+    );
 
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      email_confirm: true,
-    });
-
-    if (authError) {
-      console.error("Supabase signUp error:", authError);
-      return res
-        .status(authError.status || 400)
-        .json({ message: authError.message });
-    }
-
-    if (!authData.user) {
-      return res
-        .status(500)
-        .json({ message: "Supabase did not return a user object." });
-    }
-
-    const { id: newUserId, email: newUserEmail } = authData.user;
-
-    const newUserProfile = await db.user.create({
-      data: {
-        id: newUserId,
-        email: newUserEmail,
-      },
-    });
-
-    res.status(201).json(newUserProfile);
-  } catch (error) {
-    console.error("Error creating user:", error);
-
-    if (error.code === "P2002") {
-      return res.status(409).json({
-        message:
-          "A user with this email or ID already exists in the profile table.",
+    if (!authUser) {
+      console.error("ensureUserProfile: No user data in request");
+      return res.status(401).json({
+        message: "Invalid authentication data: No user found in request.",
       });
     }
 
-    res
-      .status(500)
-      .json({ message: "Failed to create user due to a server error." });
+    if (!authUser.id) {
+      console.error("ensureUserProfile: User data exists but no ID");
+      return res.status(401).json({
+        message: "Invalid authentication data: User ID missing.",
+      });
+    }
+
+    if (!authUser.email) {
+      console.error("ensureUserProfile: User data exists but no email");
+      return res.status(401).json({
+        message: "Invalid authentication data: User email missing.",
+      });
+    }
+
+    console.log(
+      `ensureUserProfile: Processing user ${authUser.id} (${authUser.email})`
+    );
+
+    const userProfile = await db.user.upsert({
+      where: { id: authUser.id },
+      update: {
+        email: authUser.email,
+      },
+      create: {
+        id: authUser.id,
+        email: authUser.email,
+        // Extract name from various possible locations in Supabase user object
+        name: authUser.user_metadata?.display_name || null,
+      },
+    });
+
+    console.log(`ensureUserProfile: Success for user ${authUser.id}`);
+    res.status(200).json({
+      message: "User profile ensured.",
+      profile: userProfile,
+    });
+  } catch (error) {
+    console.error("Error in ensureUserProfile:", error);
+
+    if (error.code === "P2002") {
+      return res.status(409).json({
+        message: "User profile already exists with conflicting data.",
+      });
+    }
+
+    res.status(500).json({
+      message: "Failed to ensure user profile.",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };
 
@@ -168,41 +244,64 @@ const updateCurrentUser = async (req, res) => {
     const userId = req.user?.id;
 
     if (!userId) {
-      return res
-        .status(401)
-        .json({ message: "Authentication error: User ID not found." });
+      return res.status(401).json({
+        message: "Authentication error: User ID not found.",
+      });
     }
 
     const { displayName } = req.body;
+
+    // Validate displayName
     if (
       !displayName ||
       typeof displayName !== "string" ||
       displayName.trim().length < 3
     ) {
-      return res
-        .status(400)
-        .json({ message: "Invalid display name provided." });
+      return res.status(400).json({
+        message: "Display name must be at least 3 characters long.",
+      });
     }
+
+    const trimmedDisplayName = displayName.trim();
 
     // Update display name in Supabase
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       userId,
       {
-        user_metadata: { display_name: displayName.trim() },
+        user_metadata: { display_name: trimmedDisplayName },
       }
     );
 
     if (updateError) {
-      throw updateError;
+      console.error("Supabase update error:", updateError);
+      return res.status(500).json({
+        message: "Failed to update display name in Supabase.",
+        error: updateError.message,
+      });
     }
 
     // Also update the "name" field in the local Prisma User table
-    await db.user.update({
-      where: { id: userId },
-      data: { name: displayName.trim() },
-    });
+    try {
+      await db.user.update({
+        where: { id: userId },
+        data: { name: trimmedDisplayName },
+      });
+    } catch (dbError) {
+      console.error("Database update error:", dbError);
+      // Supabase was updated but DB failed - log this for manual cleanup
+      console.error(
+        `CRITICAL: Supabase updated but DB failed for user ${userId}`
+      );
+      return res.status(500).json({
+        message:
+          "Display name updated in authentication but failed to sync with database.",
+      });
+    }
 
-    res.status(200).json({ message: "Display name updated successfully." });
+    res.status(200).json({
+      message: "Display name updated successfully.",
+      displayName: trimmedDisplayName,
+    });
   } catch (error) {
     console.error("Error updating display name:", error);
     res.status(500).json({
@@ -220,11 +319,12 @@ const updateCurrentUser = async (req, res) => {
 const getUserPreferences = async (req, res) => {
   try {
     const { userId } = getAuth(req);
-    // if (!userId) {
-    //   return res
-    //     .status(401)
-    //     .json({ message: "Unauthorized. User not logged in." });
-    // }
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Unauthorized. User not logged in.",
+      });
+    }
 
     const userPreferences = await db.userPreferences.findUnique({
       where: {
@@ -233,9 +333,9 @@ const getUserPreferences = async (req, res) => {
     });
 
     if (!userPreferences) {
-      return res
-        .status(404)
-        .json({ message: "Preferences not found for this user." });
+      return res.status(404).json({
+        message: "Preferences not found for this user.",
+      });
     }
 
     res.status(200).json(userPreferences);
@@ -255,10 +355,11 @@ const getUserPreferences = async (req, res) => {
 const createUserPreferences = async (req, res) => {
   try {
     const { userId } = getAuth(req);
+
     if (!userId) {
-      return res
-        .status(401)
-        .json({ message: "Unauthorized. User not logged in." });
+      return res.status(401).json({
+        message: "Unauthorized. User not logged in.",
+      });
     }
 
     const {
@@ -272,6 +373,7 @@ const createUserPreferences = async (req, res) => {
       eventAudience,
       lifestyle,
     } = req.body;
+
     const preferencesData = {
       age: age ? parseInt(age, 10) : null,
       dietaryRestrictions: dietary || [],
@@ -302,9 +404,9 @@ const createUserPreferences = async (req, res) => {
       });
     }
     console.error("Error creating user preferences:", error);
-    res
-      .status(500)
-      .json({ message: "Failed to create preferences due to a server error." });
+    res.status(500).json({
+      message: "Failed to create preferences due to a server error.",
+    });
   }
 };
 
@@ -441,7 +543,7 @@ const searchUsers = async (req, res) => {
 
   try {
     if (by === "name") {
-      users = await prisma.user.findMany({
+      users = await db.user.findMany({
         where: {
           name: {
             contains: query,
@@ -450,7 +552,7 @@ const searchUsers = async (req, res) => {
         },
       });
     } else if (by === "email") {
-      const userByEmail = await prisma.user.findUnique({
+      const userByEmail = await db.user.findUnique({
         where: {
           email: query,
         },
@@ -523,12 +625,14 @@ const logout = async (req, res) => {
 };
 
 module.exports = {
+  getAuth,
   logout,
   resetPassword,
   getAllUsers,
   getCurrentUser,
   getUserById,
   createUser,
+  ensureUserProfile,
   updateCurrentUser,
   getUserPreferences,
   deleteUserPreferences,

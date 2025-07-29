@@ -1,6 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const tripController = require("../controllers/tripController");
+const { protect } = require("../middleware/authMiddleware.js");
+
+// --- Authentication Middleware ---
+// Any route defined BELOW this line will be protected and require a token.
+router.use(protect);
 
 // Get all trips
 router.get("/", tripController.getAllTrips);
@@ -17,8 +22,14 @@ router.post("/", tripController.createTrip);
 // Delete a trip
 router.delete("/:id", tripController.deleteTrip);
 
+router.get('/:id/locations', tripController.getLocationsByTripId);
+
+router.get("/:id/status", tripController.getTripStatusById),
+
 // Add co-hosts to a trip
 router.post("/:id/co-hosts", tripController.addCoHost);
+
+router.delete("/:id/locations/:locationId", tripController.removeLocation);
 
 // Remove co-hosts from a trip
 router.delete("/:id/co-hosts/:userId", tripController.removeCoHost);
@@ -41,6 +52,14 @@ router.get("/:id/guests", tripController.getProposedGuests);
 // Create a poll for a trip
 router.post("/:id/polls", tripController.createPoll);
 
+router.get("/:id/host", tripController.getTripHostById);
+
+router.put("/:id/status", tripController.updateTripStatus);
+
+// update estimated time
+router.post("/:id/estimated-time", tripController.updateEstimatedTime);
+
+router.get("/:id/estimated-time", tripController.getTripTimesById);
 // Get polls for a trip
 router.get("/:id/polls", tripController.getTripPolls);
 

@@ -2,6 +2,12 @@
 const prisma = require("../db/db");
 const { getAiCompletion } = require("../services/openRouterService");
 
+const getAuth = (req) => {
+  return {
+    userId: req.user?.id || null,
+  };
+};
+
 const extractAndParseJson = (text) => {
   // Use a regex to find a JSON block, which might be wrapped in ```json ... ```
   const jsonRegex = /```json\s*([\s\S]*?)\s*```|({[\s\S]*})/;
@@ -87,6 +93,48 @@ const tripController = {
     }
   },
 
+  getTripHostById: async (req, res) => {
+    const { id } = req.params;
+
+    try {
+      const trip = await prisma.trip.findUnique({
+        where: { id },
+        select: { hostId: true },
+      });
+
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+
+      return res.status(200).json({ hostId: trip.hostId });
+    } catch (error) {
+      console.error("Error fetching trip host by ID:", error);
+      return res.status(500).json({
+        message: "Failed to fetch trip host.",
+        error: error.message,
+      });
+    }
+  },
+
+  getTripStatusById: async (req, res) => {
+    const { id } = req.params;
+    try {
+      const trip = await prisma.trip.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+
+      return res.status(200).json({ data: { status: trip.status } });
+    } catch (error) {
+      console.error("Error fetching trip status:", error);
+      return res.status(500).json({ message: "Failed to fetch trip status." });
+    }
+  },
+
   getTripsByUserId: async (req, res) => {
     const { userId } = req.params;
 
@@ -138,21 +186,142 @@ const tripController = {
     // Controller logic here
   },
 
+  getTripTimesById: async (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ message: "Trip ID is required." });
+    }
+
+    try {
+      const tripTimes = await prisma.trip.findUnique({
+        where: {
+          id: id,
+        },
+        select: {
+          startTime: true,
+          endTime: true,
+          estimatedTime: true,
+        },
+      });
+
+      if (!tripTimes) {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+
+      return res.status(200).json({
+        message: "Trip times fetched successfully!",
+        data: tripTimes,
+      });
+    } catch (error) {
+      console.error("Error fetching trip times by ID:", error);
+      return res.status(500).json({
+        message: "Failed to fetch trip times.",
+        error: error.message,
+      });
+    }
+  },
+
+  getLocationsByTripId: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).json({
+          message: "Missing tripId parameter.",
+        });
+      }
+
+      const trip = await prisma.trip.findUnique({
+        where: { id },
+        include: {
+          locations: true, // Assuming the relation is named `locations` in your `Trip` model
+        },
+      });
+
+      if (!trip) {
+        return res.status(404).json({
+          message: "Trip not found.",
+        });
+      }
+
+      return res.status(200).json({
+        message: "Locations fetched successfully.",
+        locations: trip.locations,
+      });
+    } catch (error) {
+      console.error("Error fetching locations by tripId:", error);
+      return res.status(500).json({
+        message: "Failed to fetch locations.",
+        error: error.message,
+      });
+    }
+  },
+
+  /**
+   * Creates a new trip for the authenticated user.
+   *
+   * @async
+   * @function createTrip
+   * @param {import('express').Request} req - Express request object, expects authenticated user and trip details in body.
+   * @param {import('express').Response} res - Express response object.
+   * @returns {Promise<void>} Responds with the created trip or an error message.
+   *
+   * Request body fields:
+   *   - startTime {string|Date} (required)
+   *   - endTime {string|Date} (required)
+   *   - estimatedTime {string|Date} (optional)
+   *   - title {string} (optional)
+   *   - description {string} (optional)
+   *   - tripImage {string} (optional)
+   *   - maxGuests {number} (optional)
+   *   - city {string} (optional)
+   *
+   */
   createTrip: async (req, res) => {
     try {
+      console.log("createTrip: Starting trip creation...");
+
+      // Get user ID from the authenticated request
+      const userId = req.user?.id;
+
+      if (!userId) {
+        console.error("createTrip: No user ID found in request");
+        return res.status(401).json({
+          message: "Authentication error: User ID not found.",
+        });
+      }
+
+      console.log(`createTrip: Creating trip for user ${userId}`);
+
       const {
         startTime,
         endTime,
-        hostId,
+        estimatedTime,
+        // hostId, // Ignore hostId from frontend, always use authenticated user
         title,
         description,
         tripImage,
         maxGuests,
         city,
       } = req.body;
-      if (!startTime || !endTime || !hostId) {
+
+      if (!startTime || !endTime) {
         return res.status(400).json({
-          message: "Missing required fields: startTime, endTime, and hostId.",
+          message: "Missing required fields: startTime and endTime.",
+        });
+      }
+
+      // Count how many PLANNING trips already exist for this host
+      const planningTripsCount = await prisma.trip.count({
+        where: {
+          hostId: userId,
+          status: "PLANNING",
+        },
+      });
+
+      if (planningTripsCount >= 5) {
+        return res.status(400).json({
+          message: "You can only have up to 5 planning trips.",
         });
       }
 
@@ -163,12 +332,23 @@ const tripController = {
         data: {
           startTime: parsedStartTime,
           endTime: parsedEndTime,
-          hostId: hostId,
+          estimatedTime: estimatedTime || null,
+          hostId: userId, // Use authenticated user ID
           title: title || "New Trip",
-          description: description || (city ? `trip to ${city}` : null),
-          tripImage: tripImage,
-          maxGuests: maxGuests,
-          city: city,
+          description: description || (city ? `Trip to ${city}` : "New trip"),
+          tripImage: tripImage || null,
+          maxGuests: maxGuests || null,
+          city: city || null,
+          status: "PLANNING",
+        },
+        include: {
+          host: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
         },
       });
 
@@ -178,12 +358,14 @@ const tripController = {
       });
     } catch (error) {
       console.error("Error creating trip:", error);
+
       if (error.code === "P2002") {
         return res.status(409).json({
-          message: "A trip with this invite link already exists.",
+          message: "A trip with this data already exists.",
           error: error.message,
         });
       }
+
       return res.status(500).json({
         message: "Failed to create trip.",
         error: error.message,
@@ -194,6 +376,29 @@ const tripController = {
   // Example: Update a trip
   updateTrip: async (req, res) => {
     // Controller logic here
+  },
+
+  updateTripStatus: async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Authentication error: User ID not found.",
+      });
+    }
+
+    try {
+      const updatedTrip = await prisma.trip.update({
+        where: { id },
+        data: { status },
+      });
+      res.json({ trip: updatedTrip });
+    } catch (error) {
+      console.error("Error updating trip status:", error);
+      res.status(500).json({ message: "Failed to update trip status" });
+    }
   },
 
   addLocationToTrip: async (req, res) => {
@@ -260,9 +465,143 @@ const tripController = {
     }
   },
 
+  updateEstimatedTime: async (req, res) => {
+    const { id } = req.params;
+    const { estimatedTime } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ message: "Trip ID is required." });
+    }
+    if (!estimatedTime) {
+      return res.status(400).json({ message: "Estimated time is required." });
+    }
+
+    try {
+      // Use the helper function to convert the string to a decimal
+      if (estimatedTime === null) {
+        return res.status(400).json({
+          message:
+            "Invalid estimated time format. Expected format like '2 hr 30 min'.",
+        });
+      }
+
+      // Update the trip in the database
+      const updatedTrip = await prisma.trip.update({
+        where: { id: id },
+        data: {
+          estimatedTime: estimatedTime,
+        },
+      });
+
+      return res.status(200).json({
+        message: "Trip estimated time updated successfully!",
+        trip: updatedTrip,
+      });
+    } catch (error) {
+      // This Prisma error code means "record to update not found"
+      if (error.code === "P2025") {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+      console.error("Error updating estimated time:", error);
+      return res.status(500).json({
+        message: "Failed to update estimated time.",
+        error: error.message,
+      });
+    }
+  },
+
+  // In your backend trips controller file
+
+  removeLocation: async (req, res) => {
+    const { id, locationId } = req.params; // id = tripId, locationId = Google Place ID
+
+    try {
+      // First, find the trip and include its locations (you already do this)
+      const trip = await prisma.trip.findUnique({
+        where: { id },
+        include: { locations: true },
+      });
+
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+
+      // --- START: MODIFIED LOGIC ---
+
+      // Instead of a new DB query, find the location within the trip's existing locations
+      const locationToDisconnect = trip.locations.find(
+        (loc) => loc.googlePlaceId === locationId
+      );
+
+      // If the location isn't part of this trip, we can't disconnect it.
+      if (!locationToDisconnect) {
+        return res.status(404).json({
+          message: "Location with the specified ID not found in this trip.",
+        });
+      }
+
+      // Proceed to disconnect using the location's internal database ID
+      await prisma.trip.update({
+        where: { id },
+        data: {
+          locations: {
+            disconnect: { id: locationToDisconnect.id }, // Use the internal DB ID
+          },
+        },
+      });
+
+      // --- END: MODIFIED LOGIC ---
+
+      return res.status(200).json({ message: "Location removed from trip." });
+    } catch (error) {
+      console.error("Error removing location from trip:", error);
+      return res
+        .status(500)
+        .json({ message: "Failed to remove location from trip." });
+    }
+  },
+
   // Example: Delete a trip
   deleteTrip: async (req, res) => {
-    // Controller logic here
+    try {
+      const { id } = req.params;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
+          message: "Authentication error: User ID not found.",
+        });
+      }
+
+      console.log(`deleteTrip: User ${userId} attempting to delete trip ${id}`);
+
+      const trip = await prisma.trip.findUnique({ where: { id } });
+
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found" });
+      }
+
+      if (trip.hostId !== userId) {
+        return res.status(403).json({
+          message: "You can only delete trips you created.",
+        });
+      }
+
+      if (trip.status === "COMPLETED") {
+        return res
+          .status(403)
+          .json({ message: "Completed trips cannot be deleted." });
+      }
+
+      await prisma.trip.delete({ where: { id } });
+
+      console.log(`deleteTrip: Successfully deleted trip ${id}`);
+
+      return res.status(200).json({ message: "Trip deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting trip:", error);
+      return res.status(500).json({ message: "Server error deleting trip" });
+    }
   },
 
   getTripByInviteLink: async (req, res) => {

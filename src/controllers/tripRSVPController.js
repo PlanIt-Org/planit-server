@@ -1,46 +1,15 @@
 // src/controllers/tripRSVPController.js
 const db = require("../db/db");
-const { supabase } = require("../supabaseAdmin.js");
 
 /**
  * Controller for handling Trip RSVP related operations.
  */
 const tripRSVPController = {
   /**
-   * Get all Trip RSVPs.
-   * @async
-   * @function
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @returns {void}
-   */
-  getAllTripRSVPs: async (req, res) => {
-    // Controller logic here
-  },
-
-  /**
-   * Get a Trip RSVP by its ID.
-   * @async
-   * @function
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @returns {void}
-   */
-  getTripRSVPById: async (req, res) => {
-    // Controller logic here
-  },
-
-  /**
    * Create a new Trip RSVP or update an existing one for the user and trip.
-   * @async
-   * @function
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @returns {void}
    */
   createOrUpdateRSVP: async (req, res) => {
-    console.log("Attempting RSVP for user:", req.user);
-    const userId = req.user && req.user.id;
+    const userId = req.user?.id;
     if (!userId) {
       return res
         .status(401)
@@ -51,24 +20,24 @@ const tripRSVPController = {
       const { tripId } = req.params;
       const { status } = req.body;
 
-      // 1. Check if user and trip actually exist before the upsert
-      const user = await db.user.findUnique({ where: { id: userId } });
-      if (!user) {
-        return res
-          .status(404)
-          .json({ error: "User associated with this token not found." });
-      }
-
+      // 1. Check if trip exists before the upsert
       const trip = await db.trip.findUnique({ where: { id: tripId } });
       if (!trip) {
         return res.status(404).json({ error: "Trip not found." });
       }
 
+      // 2. Validate the status
       if (!status || !["yes", "no", "maybe"].includes(status)) {
-        return res.status(400).json({ error: "Invalid status provided." });
+        return res
+          .status(400)
+          .json({
+            error: "Invalid status provided. Must be 'yes', 'no', or 'maybe'.",
+          });
       }
 
-      const rsvpStatus = status.toUpperCase();
+      // 3. Prisma requires the enum value to be uppercase
+      const rsvpStatus = status.toUpperCase(); // e.g., "YES", "NO", "MAYBE"
+
       const rsvp = await db.tripRSVP.upsert({
         where: {
           userId_tripId: { userId, tripId },
@@ -80,74 +49,115 @@ const tripRSVPController = {
       res.status(200).json(rsvp);
     } catch (error) {
       console.error("RSVP Error:", error);
-      // The error is now more likely to be a true server error,
-      // as we've handled the expected "not found" cases.
       res.status(500).json({ error: "Failed to create or update RSVP" });
     }
   },
 
   /**
-   * Update an existing Trip RSVP.
-   * @async
-   * @function
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @returns {void}
-   */
-  updateTripRSVP: async (req, res) => {
-    // Controller logic here
-    // change enum here
-  },
-
-  /**
-   * Delete a Trip RSVP.
-   * @async
-   * @function
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @returns {void}
-   */
-  deleteTripRSVP: async (req, res) => {
-    // Controller logic here
-  },
-
-  /**
-   * Get RSVPs for a specific trip.
-   * @async
-   * @function
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @returns {void}
+   * Get all RSVPs for a specific trip, including the user data for each RSVP.
+   * This is useful for building a detailed guest list that shows everyone's status.
    */
   getTripRSVPs: async (req, res) => {
-    // TODO: Implement getTripRSVPs logic
-    res.status(501).json({ message: "Not implemented yet" });
+    try {
+      const { tripId } = req.params;
+      const rsvps = await db.tripRSVP.findMany({
+        where: { tripId },
+        include: {
+          // Include the related user for each RSVP
+          user: {
+            // Select only the fields you need for the frontend
+            select: {
+              id: true,
+              name: true,
+              avatarUrl: true, // Assuming your User model has this field
+            },
+          },
+        },
+      });
+
+      res.status(200).json(rsvps);
+    } catch (error) {
+      console.error("Error fetching trip RSVPs:", error);
+      res.status(500).json({ error: "Failed to retrieve trip RSVPs." });
+    }
   },
 
   /**
-   * Get attendees for a specific trip.
-   * @async
-   * @function
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @returns {void}
+   * Get attendees (users who RSVP'd 'YES') for a specific trip.
+   * This is perfect for populating a simple list of confirmed guests.
    */
   getTripAttendees: async (req, res) => {
-    // TODO: Implement getTripAttendees logic
-    res.status(501).json({ message: "Not implemented yet" });
+    try {
+      const { tripId } = req.params;
+      const attendees = await db.tripRSVP.findMany({
+        where: {
+          tripId: tripId,
+          status: "YES", // Filter for only 'YES' status
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      });
+
+      // The result is an array of TripRSVP objects. We can map this
+      // to return a cleaner array of just the user objects.
+      const userList = attendees.map((rsvp) => rsvp.user);
+
+      res.status(200).json(userList);
+    } catch (error) {
+      console.error("Error fetching trip attendees:", error);
+      res.status(500).json({ error: "Failed to retrieve trip attendees." });
+    }
   },
 
   /**
    * Get all RSVPs for a specific user.
-   * @async
-   * @function
-   * @param {Object} req - Express request object
-   * @param {Object} res - Express response object
-   * @returns {void}
    */
   getUserRSVPs: async (req, res) => {
-    // TODO: Implement getUserRSVPs logic
-    res.status(501).json({ message: "Not implemented yet" });
+    try {
+      const { userId } = req.params;
+      const userRsvps = await db.tripRSVP.findMany({
+        where: { userId },
+        include: {
+          // Also include trip details for context
+          trip: {
+            select: {
+              id: true,
+              title: true,
+              startDate: true,
+            },
+          },
+        },
+      });
+      res.status(200).json(userRsvps);
+    } catch (error) {
+      console.error("Error fetching user RSVPs:", error);
+      res.status(500).json({ error: "Failed to retrieve user RSVPs." });
+    }
+  },
+
+  // --- Other placeholder functions from your original file ---
+  getAllTripRSVPs: async (req, res) => {
+    res
+      .status(501)
+      .json({ message: "Not implemented. Use getTripRSVPs with a tripId." });
+  },
+  getTripRSVPById: async (req, res) => {
+    res.status(501).json({ message: "Not implemented yet." });
+  },
+  updateTripRSVP: async (req, res) => {
+    res
+      .status(501)
+      .json({ message: "Not implemented. Use createOrUpdateRSVP." });
+  },
+  deleteTripRSVP: async (req, res) => {
+    res.status(501).json({ message: "Not implemented yet." });
   },
 };
 
