@@ -184,32 +184,26 @@ const tripController = {
   // Example: Get trip by ID
   getTripById: async (req, res) => {
     const { id } = req.params;
-    if (!id) {
-      return res.status(400).json({ message: "Trip ID is required." });
-    }
   
     try {
       const trip = await prisma.trip.findUnique({
-        where: {
-          id: id,
+        where: { id: id },
+        include: {
+          host: {
+            select: {
+              name: true, 
+            },
+          },
         },
       });
   
       if (!trip) {
         return res.status(404).json({ message: "Trip not found." });
       }
-  
-      return res.status(200).json({
-        message: "Trip details fetched successfully!",
-        trip: trip,
-      });
+        return res.status(200).json({ trip });
   
     } catch (error) {
-      console.error("Error fetching trip by ID:", error);
-      return res.status(500).json({
-        message: "Failed to fetch trip details.",
-        error: error.message,
-      });
+      // ... (error handling) ...
     }
   },
 
@@ -537,6 +531,38 @@ const tripController = {
       return res
         .status(500)
         .json({ message: "Failed to add location to trip." });
+    }
+  },
+
+
+  updateTripPrivacy: async (req, res) => {
+    const { id } = req.params;
+    const { private: isPrivate } = req.body;
+  
+    if (typeof isPrivate !== 'boolean') {
+      return res.status(400).json({ message: "Invalid 'private' status provided. Must be a boolean." });
+    }
+  
+    try {
+      const updatedTrip = await prisma.trip.update({
+        where: { id: id },
+        data: { private: isPrivate },
+      });
+  
+      return res.status(200).json({
+        message: `Trip is now ${isPrivate ? 'private' : 'public'}.`,
+        trip: updatedTrip,
+      });
+  
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+      console.error("Error updating trip privacy:", error);
+      return res.status(500).json({
+        message: "Failed to update trip privacy.",
+        error: error.message,
+      });
     }
   },
 

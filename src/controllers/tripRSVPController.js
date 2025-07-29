@@ -1,6 +1,5 @@
 // src/controllers/tripRSVPController.js
-const db = require("../db/db");
-
+const prisma = require("../db/db");
 /**
  * Controller for handling Trip RSVP related operations.
  */
@@ -9,47 +8,46 @@ const tripRSVPController = {
    * Create a new Trip RSVP or update an existing one for the user and trip.
    */
   createOrUpdateRSVP: async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res
-        .status(401)
-        .json({ message: "Unauthorized. User not logged in." });
+    const { tripId } = req.params;
+    const { status } = req.body; // e.g., "yes" or "no"
+    const userId = req.user.id;
+
+    // 1. Convert incoming string to uppercase to match the Enum
+    const rsvpEnumStatus = status.toUpperCase();
+
+    // 2. Validate the converted status against the Enum values
+    if (!["YES", "NO", "MAYBE"].includes(rsvpEnumStatus)) {
+      return res.status(400).json({ message: "Invalid status provided." });
     }
 
     try {
-      const { tripId } = req.params;
-      const { status } = req.body;
-
-      // 1. Check if trip exists before the upsert
-      const trip = await db.trip.findUnique({ where: { id: tripId } });
-      if (!trip) {
-        return res.status(404).json({ error: "Trip not found." });
-      }
-
-      // 2. Validate the status
-      if (!status || !["yes", "no", "maybe"].includes(status)) {
-        return res
-          .status(400)
-          .json({
-            error: "Invalid status provided. Must be 'yes', 'no', or 'maybe'.",
-          });
-      }
-
-      // 3. Prisma requires the enum value to be uppercase
-      const rsvpStatus = status.toUpperCase(); // e.g., "YES", "NO", "MAYBE"
-
-      const rsvp = await db.tripRSVP.upsert({
+      const rsvp = await prisma.tripRSVP.upsert({
         where: {
-          userId_tripId: { userId, tripId },
+          userId_tripId: {
+            userId: userId,
+            tripId: tripId,
+          },
         },
-        update: { status: rsvpStatus },
-        create: { userId, tripId, status: rsvpStatus },
+        update: {
+          status: rsvpEnumStatus,
+        },
+        create: {
+          userId: userId,
+          tripId: tripId,
+          status: rsvpEnumStatus,
+        },
       });
 
-      res.status(200).json(rsvp);
+      return res.status(200).json({
+        message: "RSVP processed successfully!",
+        data: rsvp,
+      });
     } catch (error) {
-      console.error("RSVP Error:", error);
-      res.status(500).json({ error: "Failed to create or update RSVP" });
+      console.error("Error processing RSVP:", error);
+      return res.status(500).json({
+        message: "Failed to process RSVP.",
+        error: error.message,
+      });
     }
   },
 
