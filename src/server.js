@@ -15,8 +15,24 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN;
 const { protect } = require("./middleware/authMiddleware");
 
 const corsOption = {
-  origin: CORS_ORIGIN,
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = [
+      process.env.CORS_ORIGIN,
+      "https://planit-client-static.onrender.com",
+    ].filter(Boolean);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log("Blocked origin:", origin);
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 };
 
 const userRoutes = require("./routes/userRoutes");
@@ -36,17 +52,17 @@ app.use(morgan("combined", { stream: accessLogStream }));
 app.use(cors(corsOption));
 app.use(express.json());
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  message: {
-    error: "Too many requests from this IP, please try again after 15 minutes.",
-  },
-});
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+//   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+//   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+//   message: {
+//     error: "Too many requests from this IP, please try again after 15 minutes.",
+//   },
+// });
 
-app.use("/api", limiter);
+// app.use("/api", limiter);
 
 app.get("/", (req, res) => {
   res.send("Hello World");
