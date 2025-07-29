@@ -18,17 +18,19 @@ const {
 } = require("../controllers/userController");
 const { protect } = require("../middleware/authMiddleware");
 
-// --- Public Routes ---
+// --- Public Routes (No authentication required) ---
 router.post("/create", createUser);
+router.post("/reset-password", resetPassword);
+router.post("/logout", logout);
 
 // --- Authentication Middleware ---
 // Any route defined BELOW this line will be protected and require a token.
 router.use(protect);
 
-router.post("/ensure-profile", ensureUserProfile);
-
 // --- Protected Routes ---
 // Routes for logged-in users.
+router.post("/ensure-profile", ensureUserProfile);
+
 router.route("/me").get(getCurrentUser).put(updateCurrentUser);
 
 router
@@ -36,9 +38,6 @@ router
   .get(getUserPreferences)
   .put(updateUserPreferences)
   .delete(deleteUserPreferences);
-
-router.post("/reset-password", resetPassword);
-router.post("/logout", logout);
 
 router.get("/past-trips", getUserPastTrips);
 
