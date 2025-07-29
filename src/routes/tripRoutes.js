@@ -5,7 +5,7 @@ const { protect } = require("../middleware/authMiddleware.js");
 
 // --- Authentication Middleware ---
 // Any route defined BELOW this line will be protected and require a token.
-// router.use(protect);
+router.use(protect);
 
 // Get all trips
 router.get("/", tripController.getAllTrips);
