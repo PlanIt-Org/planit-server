@@ -183,7 +183,34 @@ const tripController = {
 
   // Example: Get trip by ID
   getTripById: async (req, res) => {
-    // Controller logic here
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ message: "Trip ID is required." });
+    }
+  
+    try {
+      const trip = await prisma.trip.findUnique({
+        where: {
+          id: id,
+        },
+      });
+  
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+  
+      return res.status(200).json({
+        message: "Trip details fetched successfully!",
+        trip: trip,
+      });
+  
+    } catch (error) {
+      console.error("Error fetching trip by ID:", error);
+      return res.status(500).json({
+        message: "Failed to fetch trip details.",
+        error: error.message,
+      });
+    }
   },
 
   getTripTimesById: async (req, res) => {
@@ -376,6 +403,54 @@ const tripController = {
   // Example: Update a trip
   updateTrip: async (req, res) => {
     // Controller logic here
+  },
+
+
+  updateTripDetails: async (req, res) => {
+    // 1. Get trip ID from URL parameters
+    const { id } = req.params;
+    
+    // 2. Get title and description from the request body
+    const { title, description } = req.body;
+  
+    // 3. Prepare an object with only the fields to be updated
+    const dataToUpdate = {};
+    if (title !== undefined) {
+      dataToUpdate.title = title;
+    }
+    if (description !== undefined) {
+      dataToUpdate.description = description;
+    }
+  
+    // 4. If there's nothing to update, return an error
+    if (Object.keys(dataToUpdate).length === 0) {
+      return res.status(400).json({ message: "No update data provided." });
+    }
+  
+    try {
+      // 5. Use Prisma to find the trip and update it with the new data
+      const updatedTrip = await prisma.trip.update({
+        where: { id: id },
+        data: dataToUpdate,
+      });
+  
+      return res.status(200).json({
+        message: "Trip updated successfully!",
+        trip: updatedTrip,
+      });
+  
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+      
+      // Handle other potential server errors
+      console.error("Error updating trip:", error);
+      return res.status(500).json({
+        message: "Failed to update trip.",
+        error: error.message,
+      });
+    }
   },
 
   updateTripStatus: async (req, res) => {
