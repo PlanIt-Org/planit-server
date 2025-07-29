@@ -17,6 +17,7 @@ const { protect } = require("./middleware/authMiddleware");
 const corsOption = {
   origin: CORS_ORIGIN,
   credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"],
 };
 
 const userRoutes = require("./routes/userRoutes");
@@ -36,17 +37,17 @@ app.use(morgan("combined", { stream: accessLogStream }));
 app.use(cors(corsOption));
 app.use(express.json());
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  message: {
-    error: "Too many requests from this IP, please try again after 15 minutes.",
-  },
-});
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+//   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+//   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+//   message: {
+//     error: "Too many requests from this IP, please try again after 15 minutes.",
+//   },
+// });
 
-app.use("/api", limiter);
+// app.use("/api", limiter);
 
 app.get("/", (req, res) => {
   res.send("Hello World");

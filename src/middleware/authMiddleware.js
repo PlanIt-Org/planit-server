@@ -3,8 +3,16 @@ const { supabase } = require("../supabaseAdmin.js");
 
 const protect = async (req, res, next) => {
   console.log("\n--- Running Protect Middleware ---");
+  console.log("=== PROTECT MIDDLEWARE DEBUG ===");
+  console.log("All headers:", req.headers);
+  console.log("Authorization header:", req.headers.authorization);
+  console.log(
+    "Bearer token present:",
+    req.headers.authorization?.startsWith("Bearer ")
+  );
 
   const authHeader = req.headers.authorization;
+
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     console.log("Middleware Error: No Authorization header found.");
     return res

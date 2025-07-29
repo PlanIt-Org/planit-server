@@ -24,10 +24,12 @@ const createUser = async (req, res) => {
   }
 
   try {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+    const { data: authData, error: authError } =
+      await supabase.auth.admin.createUser({
+        email: email,
+        password: password,
+        user_metadata: { display_name: name },
+      });
 
     if (authError) {
       throw new Error(authError.message, {
