@@ -24,6 +24,13 @@ enum RSVPStatus {
   MAYBE
 }
 
+enum TripStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
 // --- Model Definitions ---
 
 model User {
@@ -171,13 +178,6 @@ model PollResponse {
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@unique([pollId, userId])
-}
-
-enum TripStatus {
-  PLANNING
-  ACTIVE
-  COMPLETED
-  CANCELLED
 }
 
 model UserPreferences {
