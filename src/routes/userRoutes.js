@@ -43,6 +43,7 @@ router.get("/past-trips", getUserPastTrips);
 
 router.get("/", getAllUsers);
 
+//Used by TripFilter
 router.get("/search", searchUsers);
 
 router.get("/:id", getUserById);
