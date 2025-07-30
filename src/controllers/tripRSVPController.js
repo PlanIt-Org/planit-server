@@ -140,6 +140,36 @@ const tripRSVPController = {
     }
   },
 
+  getSpecificRSVP: async (req, res) => {
+    const { tripId } = req.params;
+    const userId = req.user.id;
+    try {
+      const rsvp = await prisma.tripRSVP.findUnique({
+        where: {
+          userId_tripId: {
+            userId: userId,
+            tripId: tripId,
+          },
+        },
+        select: {
+          status: true,
+        },
+      });
+
+      if (!rsvp) {
+        return res
+          .status(404)
+          .json({ message: "RSVP not found for this user and trip." });
+      }
+      return res.status(200).json(rsvp);
+    } catch (error) {
+      console.error("Error fetching specific RSVP:", error);
+      return res
+        .status(500)
+        .json({ message: "Failed to retrieve RSVP status." });
+    }
+  },
+
   // --- Other placeholder functions from your original file ---
   getAllTripRSVPs: async (req, res) => {
     res
