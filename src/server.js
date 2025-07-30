@@ -8,7 +8,7 @@ const morgan = require("morgan");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
-const rateLimit = require("express-rate-limit");
+// const rateLimit = require("express-rate-limit");
 const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN;
 

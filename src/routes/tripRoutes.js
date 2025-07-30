@@ -43,6 +43,10 @@ router.get("/user/:userId", tripController.getTripsByUserId);
 // Add proposed guests to a trip
 router.post("/:id/guests", tripController.addProposedGuest);
 
+router.put('/:id', tripController.updateTripDetails);
+
+router.put('/:id/privacy', tripController.updateTripPrivacy);
+
 // Remove proposed guests from a trip
 router.delete("/:id/guests/:guestId", tripController.removeProposedGuest);
 

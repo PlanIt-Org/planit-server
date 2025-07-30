@@ -17,6 +17,8 @@ router.get("/:tripId", tripRSVPController.getTripRSVPs);
 // Get all attendees (e.g., users who said 'yes') for a trip
 router.get("/:tripId/attendees", tripRSVPController.getTripAttendees);
 
+router.get("/:tripId/my-rsvp", tripRSVPController.getSpecificRSVP);
+
 // Create or update the logged-in user's RSVP for a specific trip
 router.post("/:tripId/rsvp", tripRSVPController.createOrUpdateRSVP);
 
