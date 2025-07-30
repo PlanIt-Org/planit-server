@@ -135,26 +135,73 @@ const tripController = {
     }
   },
 
+
+  addUserToInvitedList: async (req, res) => {
+    const { tripId } = req.params;
+    const { userId } = req.body; 
+  
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required." });
+    }
+  
+    try {
+      await prisma.trip.update({
+        where: { id: tripId },
+        data: {
+          invitedUsers: {
+            connect: { id: userId },
+          },
+        },
+      });
+  
+      return res.status(200).json({ message: "User added to invited list." });
+  
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ message: "Trip or User not found." });
+      }
+      console.error("Error adding user to invited list:", error);
+      return res.status(500).json({ message: "Failed to update trip." });
+    }
+  },
+
   getTripsByUserId: async (req, res) => {
     const { userId } = req.params;
 
-    try {
-      if (!userId) {
-        return res
-          .status(400)
-          .json({ message: "Missing userId in request params." });
-      }
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ message: "Missing userId in request params." });
+    }
 
+    try {
       const trips = await prisma.trip.findMany({
         where: {
-          hostId: userId,
+          OR: [
+            {
+              hostId: userId, 
+            },
+            {
+              invitedUsers: { 
+                some: {
+                  id: userId,
+                },
+              },
+            },
+            {
+              savedByUsers: {
+                some: {
+                  id: userId,
+                },
+              },
+            },
+          ],
         },
         include: {
           host: {
             select: {
               id: true,
               name: true,
-              email: true,
             },
           },
           locations: {
@@ -165,7 +212,21 @@ const tripController = {
               image: true,
             },
           },
+          invitedUsers: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          savedByUsers: {
+            select: {
+              id: true,
+            },
+          },
         },
+        orderBy: {
+            createdAt: 'desc'
+        }
       });
 
       return res.status(200).json({
@@ -180,6 +241,55 @@ const tripController = {
       });
     }
   },
+
+
+ toggleSaveTrip: async (req, res) => {
+    const { tripId } = req.params;
+    // Get the user ID from your authentication middleware
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required." });
+    }
+
+    try {
+      // First, find the trip to see if the current user has already saved it
+      const trip = await prisma.trip.findUnique({
+        where: { id: tripId },
+        select: {
+          savedByUsers: {
+            where: { id: userId },
+          },
+        },
+      });
+
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+
+      const isAlreadySaved = trip.savedByUsers.length > 0;
+
+      // Use a dynamic action: 'disconnect' if it's already saved, 'connect' otherwise
+      const action = isAlreadySaved ? 'disconnect' : 'connect';
+
+      await prisma.trip.update({
+        where: { id: tripId },
+        data: {
+          savedByUsers: {
+            [action]: { id: userId },
+          },
+        },
+      });
+
+      const message = isAlreadySaved ? "Trip unsaved." : "Trip saved.";
+      return res.status(200).json({ message });
+
+    } catch (error) {
+      console.error("Error toggling save trip:", error);
+      return res.status(500).json({ message: "Failed to update trip." });
+    }
+  },
+
 
   // Example: Get trip by ID
   getTripById: async (req, res) => {
