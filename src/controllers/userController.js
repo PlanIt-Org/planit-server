@@ -61,7 +61,6 @@ const createUser = async (req, res) => {
 
     newAuthUser = authData.user;
 
-    // Generate default profile picture URL
     const defaultProfilePictureUrl = generateAvatarUrl(
       name || email.split("@")[0]
     );
@@ -308,7 +307,6 @@ const updateCurrentUser = async (req, res) => {
     const updateData = {};
     const supabaseUpdateData = {};
 
-    // Validate and prepare displayName update
     if (displayName !== undefined) {
       if (
         !displayName ||
@@ -324,7 +322,6 @@ const updateCurrentUser = async (req, res) => {
       updateData.name = trimmedDisplayName;
       supabaseUpdateData.user_metadata = { display_name: trimmedDisplayName };
 
-      // Generate new avatar URL with updated name
       updateData.profilePictureUrl = generateAvatarUrl(trimmedDisplayName);
     }
 
@@ -354,6 +351,10 @@ const updateCurrentUser = async (req, res) => {
           error: updateError.message,
         });
       }
+    }
+
+    if (displayName !== undefined) {
+      await updateProfilePicture(userId, displayName.trim());
     }
 
     // Update the local Prisma User table
@@ -430,7 +431,6 @@ const updateProfilePicture = async (req, res) => {
       });
     }
 
-    // Validate parameters
     const validatedBackground =
       background && /^[0-9a-fA-F]{6}$/.test(background) ? background : "007bff";
     const validatedColor =
@@ -438,7 +438,6 @@ const updateProfilePicture = async (req, res) => {
     const validatedSize =
       size && Number.isInteger(size) && size >= 16 && size <= 512 ? size : 200;
 
-    // Generate new avatar URL
     const displayName = currentUser.name || currentUser.email.split("@")[0];
     const newProfilePictureUrl = generateAvatarUrl(
       displayName,
@@ -447,7 +446,6 @@ const updateProfilePicture = async (req, res) => {
       validatedSize
     );
 
-    // Update profile picture URL in database
     const updatedUser = await db.user.update({
       where: { id: userId },
       data: { profilePictureUrl: newProfilePictureUrl },
