@@ -9,6 +9,24 @@ const getAuth = (req) => {
 };
 
 /**
+ * Helper function to generate ui-avatars.com URL
+ * @param {string} name - User's display name
+ * @param {string} background - Background color (hex without #)
+ * @param {string} color - Text color (hex without #)
+ * @param {number} size - Avatar size in pixels
+ * @returns {string} Complete ui-avatars.com URL
+ */
+const generateAvatarUrl = (
+  name,
+  background = "007bff",
+  color = "ffffff",
+  size = 200
+) => {
+  const encodedName = encodeURIComponent(name || "User");
+  return `https://ui-avatars.com/api/?name=${encodedName}&background=${background}&color=${color}&size=${size}`;
+};
+
+/**
  * @desc    Create a new user in Supabase and the application database.
  * @route   POST /api/users/create
  * @access  Public // Registration routes should be public
@@ -43,12 +61,17 @@ const createUser = async (req, res) => {
 
     newAuthUser = authData.user;
 
+    const defaultProfilePictureUrl = generateAvatarUrl(
+      name || email.split("@")[0]
+    );
+
     // This is the step that might fail, leaving an orphaned auth user.
     const newUserProfile = await db.user.create({
       data: {
         id: newAuthUser.id,
         email: newAuthUser.email,
         name: name || null,
+        profilePictureUrl: defaultProfilePictureUrl,
       },
     });
 
@@ -127,7 +150,25 @@ const getCurrentUser = async (req, res) => {
       });
     }
 
-    res.status(200).json(req.user);
+    // Get complete user profile from database
+    const userProfile = await db.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        profilePictureUrl: true,
+        phoneNumber: true,
+      },
+    });
+
+    if (!userProfile) {
+      return res.status(404).json({
+        message: "User profile not found in database.",
+      });
+    }
+
+    res.status(200).json(userProfile);
   } catch (error) {
     console.error("Error fetching current user:", error);
     res.status(500).json({ message: "Failed to retrieve current user." });
@@ -142,19 +183,24 @@ const getCurrentUser = async (req, res) => {
 const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.admin.getUserById(id);
 
-    if (error) {
-      if (error.status === 404) {
-        return res.status(404).json({ message: "User not found." });
-      }
-      throw error;
+    // Get user from database instead of just Supabase auth
+    const user = await db.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        profilePictureUrl: true,
+        phoneNumber: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
     }
 
-    res.status(200).json(data.user);
+    res.status(200).json(user);
   } catch (error) {
     console.error(`Error fetching user by ID ${req.params.id}:`, error);
     res.status(500).json({ message: "Failed to retrieve user." });
@@ -202,16 +248,22 @@ const ensureUserProfile = async (req, res) => {
       `ensureUserProfile: Processing user ${authUser.id} (${authUser.email})`
     );
 
+    const displayName = authUser.user_metadata?.display_name;
+    const defaultProfilePictureUrl = generateAvatarUrl(
+      displayName || authUser.email.split("@")[0]
+    );
+
     const userProfile = await db.user.upsert({
       where: { id: authUser.id },
       update: {
         email: authUser.email,
+        name: displayName || undefined,
       },
       create: {
         id: authUser.id,
         email: authUser.email,
-        // Extract name from various possible locations in Supabase user object
-        name: authUser.user_metadata?.display_name || null,
+        name: displayName || null,
+        profilePictureUrl: defaultProfilePictureUrl,
       },
     });
 
@@ -251,63 +303,188 @@ const updateCurrentUser = async (req, res) => {
       });
     }
 
-    const { displayName } = req.body;
+    const { displayName, phoneNumber } = req.body;
+    const updateData = {};
+    const supabaseUpdateData = {};
 
-    // Validate displayName
-    if (
-      !displayName ||
-      typeof displayName !== "string" ||
-      displayName.trim().length < 3
-    ) {
-      return res.status(400).json({
-        message: "Display name must be at least 3 characters long.",
-      });
-    }
-
-    const trimmedDisplayName = displayName.trim();
-
-    // Update display name in Supabase
-    const { error: updateError } = await supabase.auth.admin.updateUserById(
-      userId,
-      {
-        user_metadata: { display_name: trimmedDisplayName },
+    if (displayName !== undefined) {
+      if (
+        !displayName ||
+        typeof displayName !== "string" ||
+        displayName.trim().length < 3
+      ) {
+        return res.status(400).json({
+          message: "Display name must be at least 3 characters long.",
+        });
       }
-    );
 
-    if (updateError) {
-      console.error("Supabase update error:", updateError);
-      return res.status(500).json({
-        message: "Failed to update display name in Supabase.",
-        error: updateError.message,
-      });
+      const trimmedDisplayName = displayName.trim();
+      updateData.name = trimmedDisplayName;
+      supabaseUpdateData.user_metadata = { display_name: trimmedDisplayName };
+
+      updateData.profilePictureUrl = generateAvatarUrl(trimmedDisplayName);
     }
 
-    // Also update the "name" field in the local Prisma User table
+    // Validate and prepare phoneNumber update
+    if (phoneNumber !== undefined) {
+      if (phoneNumber && typeof phoneNumber === "string") {
+        const trimmedPhone = phoneNumber.trim();
+        if (trimmedPhone.length > 0) {
+          updateData.phoneNumber = trimmedPhone;
+        }
+      } else if (phoneNumber === null || phoneNumber === "") {
+        updateData.phoneNumber = null;
+      }
+    }
+
+    // Update display name in Supabase if provided
+    if (Object.keys(supabaseUpdateData).length > 0) {
+      const { error: updateError } = await supabase.auth.admin.updateUserById(
+        userId,
+        supabaseUpdateData
+      );
+
+      if (updateError) {
+        console.error("Supabase update error:", updateError);
+        return res.status(500).json({
+          message: "Failed to update user data in Supabase.",
+          error: updateError.message,
+        });
+      }
+    }
+
+    if (displayName !== undefined) {
+      await updateProfilePicture(userId, displayName.trim());
+    }
+
+    // Update the local Prisma User table
     try {
-      await db.user.update({
+      const updatedUser = await db.user.update({
         where: { id: userId },
-        data: { name: trimmedDisplayName },
+        data: updateData,
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          profilePictureUrl: true,
+          phoneNumber: true,
+        },
+      });
+
+      res.status(200).json({
+        message: "User profile updated successfully.",
+        user: updatedUser,
       });
     } catch (dbError) {
       console.error("Database update error:", dbError);
+
+      if (dbError.code === "P2002") {
+        return res.status(409).json({
+          message: "Phone number already exists for another user.",
+        });
+      }
+
       // Supabase was updated but DB failed - log this for manual cleanup
       console.error(
         `CRITICAL: Supabase updated but DB failed for user ${userId}`
       );
       return res.status(500).json({
         message:
-          "Display name updated in authentication but failed to sync with database.",
+          "User data updated in authentication but failed to sync with database.",
+      });
+    }
+  } catch (error) {
+    console.error("Error updating user profile:", error);
+    res.status(500).json({
+      message: "Failed to update user profile.",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * @desc    Update user's profile picture with custom ui-avatars.com parameters
+ * @route   PUT /api/users/profile-picture
+ * @access  Private
+ */
+const updateProfilePicture = async (req, res) => {
+  try {
+    console.debug("updateProfilePicture called");
+    const userId = req.user?.id;
+    console.debug("Extracted userId:", userId);
+
+    if (!userId) {
+      console.warn("No userId found in request.");
+      return res.status(401).json({
+        message: "Authentication error: User ID not found.",
       });
     }
 
+    const { background, color, size } = req.body;
+    console.debug("Received body params:", { background, color, size });
+
+    // Get current user to get their name
+    const currentUser = await db.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    });
+    console.debug("Fetched currentUser:", currentUser);
+
+    if (!currentUser) {
+      console.warn(`User not found for id: ${userId}`);
+      return res.status(404).json({
+        message: "User not found.",
+      });
+    }
+
+    // Validate parameters
+    const validatedBackground =
+      background && /^[0-9a-fA-F]{6}$/.test(background) ? background : "007bff";
+    const validatedColor =
+      color && /^[0-9a-fA-F]{6}$/.test(color) ? color : "ffffff";
+    const validatedSize =
+      size && Number.isInteger(size) && size >= 16 && size <= 512 ? size : 200;
+
+    console.debug("Validated params:", {
+      validatedBackground,
+      validatedColor,
+      validatedSize,
+    });
+
+    // Generate new avatar URL
+    const displayName = currentUser.name || currentUser.email.split("@")[0];
+    console.debug("Using displayName for avatar:", displayName);
+
+    const newProfilePictureUrl = generateAvatarUrl(
+      displayName,
+      validatedBackground,
+      validatedColor,
+      validatedSize
+    );
+    console.debug("Generated newProfilePictureUrl:", newProfilePictureUrl);
+
+    // Update profile picture URL in database
+    const updatedUser = await db.user.update({
+      where: { id: userId },
+      data: { profilePictureUrl: newProfilePictureUrl },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        profilePictureUrl: true,
+        phoneNumber: true,
+      },
+    });
+    console.debug("Updated user in DB:", updatedUser);
+
     res.status(200).json({
-      message: "Display name updated successfully.",
-      displayName: trimmedDisplayName,
+      message: "Profile picture updated successfully.",
+      user: updatedUser,
     });
   } catch (error) {
-    console.error("Error updating display name:", error);
+    console.error("Error updating profile picture:", error);
     res.status(500).json({
-      message: "Failed to update display name.",
+      message: "Failed to update profile picture.",
       error: error.message,
     });
   }
@@ -552,14 +729,20 @@ const searchUsers = async (req, res) => {
             mode: "insensitive",
           },
         },
-        include:{
-          userPreferences: true
-        }
+        include: {
+          userPreferences: true,
+        },
       });
     } else if (by === "email") {
       const userByEmail = await db.user.findUnique({
         where: {
           email: query,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          profilePictureUrl: true,
         },
       });
 
@@ -639,6 +822,7 @@ module.exports = {
   createUser,
   ensureUserProfile,
   updateCurrentUser,
+  updateProfilePicture,
   getUserPreferences,
   deleteUserPreferences,
   createUserPreferences,
