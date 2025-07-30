@@ -409,23 +409,29 @@ const updateCurrentUser = async (req, res) => {
  */
 const updateProfilePicture = async (req, res) => {
   try {
+    console.debug("updateProfilePicture called");
     const userId = req.user?.id;
+    console.debug("Extracted userId:", userId);
 
     if (!userId) {
+      console.warn("No userId found in request.");
       return res.status(401).json({
         message: "Authentication error: User ID not found.",
       });
     }
 
     const { background, color, size } = req.body;
+    console.debug("Received body params:", { background, color, size });
 
     // Get current user to get their name
     const currentUser = await db.user.findUnique({
       where: { id: userId },
       select: { name: true, email: true },
     });
+    console.debug("Fetched currentUser:", currentUser);
 
     if (!currentUser) {
+      console.warn(`User not found for id: ${userId}`);
       return res.status(404).json({
         message: "User not found.",
       });
@@ -439,14 +445,23 @@ const updateProfilePicture = async (req, res) => {
     const validatedSize =
       size && Number.isInteger(size) && size >= 16 && size <= 512 ? size : 200;
 
+    console.debug("Validated params:", {
+      validatedBackground,
+      validatedColor,
+      validatedSize,
+    });
+
     // Generate new avatar URL
     const displayName = currentUser.name || currentUser.email.split("@")[0];
+    console.debug("Using displayName for avatar:", displayName);
+
     const newProfilePictureUrl = generateAvatarUrl(
       displayName,
       validatedBackground,
       validatedColor,
       validatedSize
     );
+    console.debug("Generated newProfilePictureUrl:", newProfilePictureUrl);
 
     // Update profile picture URL in database
     const updatedUser = await db.user.update({
@@ -460,6 +475,7 @@ const updateProfilePicture = async (req, res) => {
         phoneNumber: true,
       },
     });
+    console.debug("Updated user in DB:", updatedUser);
 
     res.status(200).json({
       message: "Profile picture updated successfully.",
