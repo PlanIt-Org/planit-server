@@ -38,6 +38,7 @@ model User {
   email               String     @unique
   name                String?
   // password            String?     
+  profilePictureUrl   String?
   phoneNumber         String?    @unique 
   // activityPreferences String[] @default([])
 

@@ -15,6 +15,7 @@ const {
   logout,
   searchUsers,
   ensureUserProfile,
+  updateProfilePicture,
 } = require("../controllers/userController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -47,5 +48,7 @@ router.get("/", getAllUsers);
 router.get("/search", searchUsers);
 
 router.get("/:id", getUserById);
+
+router.put("/profile-picture", updateProfilePicture);
 
 module.exports = router;
