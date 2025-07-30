@@ -552,6 +552,9 @@ const searchUsers = async (req, res) => {
             mode: "insensitive",
           },
         },
+        include:{
+          userPreferences: true
+        }
       });
     } else if (by === "email") {
       const userByEmail = await db.user.findUnique({
