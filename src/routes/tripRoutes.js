@@ -47,6 +47,9 @@ router.put('/:id', tripController.updateTripDetails);
 
 router.put('/:id/privacy', tripController.updateTripPrivacy);
 
+
+router.post('/:tripId/add-invited', tripController.addUserToInvitedList);
+
 // Remove proposed guests from a trip
 router.delete("/:id/guests/:guestId", tripController.removeProposedGuest);
 

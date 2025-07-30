@@ -135,26 +135,66 @@ const tripController = {
     }
   },
 
+
+  addUserToInvitedList: async (req, res) => {
+    const { tripId } = req.params;
+    const { userId } = req.body; 
+  
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required." });
+    }
+  
+    try {
+      await prisma.trip.update({
+        where: { id: tripId },
+        data: {
+          invitedUsers: {
+            connect: { id: userId },
+          },
+        },
+      });
+  
+      return res.status(200).json({ message: "User added to invited list." });
+  
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ message: "Trip or User not found." });
+      }
+      console.error("Error adding user to invited list:", error);
+      return res.status(500).json({ message: "Failed to update trip." });
+    }
+  },
+
   getTripsByUserId: async (req, res) => {
     const { userId } = req.params;
 
-    try {
-      if (!userId) {
-        return res
-          .status(400)
-          .json({ message: "Missing userId in request params." });
-      }
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ message: "Missing userId in request params." });
+    }
 
+    try {
       const trips = await prisma.trip.findMany({
         where: {
-          hostId: userId,
+          OR: [
+            {
+              hostId: userId,
+            },
+            {
+              invitedUsers: {
+                some: {
+                  id: userId,
+                },
+              },
+            },
+          ],
         },
         include: {
           host: {
             select: {
               id: true,
               name: true,
-              email: true,
             },
           },
           locations: {
@@ -165,7 +205,16 @@ const tripController = {
               image: true,
             },
           },
+          invitedUsers: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
+        orderBy: {
+            createdAt: 'desc'
+        }
       });
 
       return res.status(200).json({
@@ -180,6 +229,7 @@ const tripController = {
       });
     }
   },
+
 
   // Example: Get trip by ID
   getTripById: async (req, res) => {
