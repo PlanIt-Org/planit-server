@@ -431,6 +431,7 @@ const updateProfilePicture = async (req, res) => {
       });
     }
 
+    // Validate parameters
     const validatedBackground =
       background && /^[0-9a-fA-F]{6}$/.test(background) ? background : "007bff";
     const validatedColor =
@@ -438,6 +439,7 @@ const updateProfilePicture = async (req, res) => {
     const validatedSize =
       size && Number.isInteger(size) && size >= 16 && size <= 512 ? size : 200;
 
+    // Generate new avatar URL
     const displayName = currentUser.name || currentUser.email.split("@")[0];
     const newProfilePictureUrl = generateAvatarUrl(
       displayName,
@@ -446,6 +448,7 @@ const updateProfilePicture = async (req, res) => {
       validatedSize
     );
 
+    // Update profile picture URL in database
     const updatedUser = await db.user.update({
       where: { id: userId },
       data: { profilePictureUrl: newProfilePictureUrl },
@@ -710,11 +713,8 @@ const searchUsers = async (req, res) => {
             mode: "insensitive",
           },
         },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          profilePictureUrl: true,
+        include: {
+          userPreferences: true,
         },
       });
     } else if (by === "email") {
@@ -813,5 +813,4 @@ module.exports = {
   updateUserPreferences,
   getUserPastTrips,
   searchUsers,
-  generateAvatarUrl,
 };

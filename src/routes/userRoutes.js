@@ -41,8 +41,9 @@ router
   .delete(deleteUserPreferences);
 
 router.get("/past-trips", getUserPastTrips);
-
 router.get("/", getAllUsers);
+
+router.put("/profile-picture", updateProfilePicture);
 
 //Used by TripFilter
 router.get("/search", searchUsers);
