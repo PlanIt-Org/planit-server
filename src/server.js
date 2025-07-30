@@ -1,4 +1,5 @@
 // server.js
+// import { startTripStatusUpdater } from './schedulers/tripStatusUpdater.js';
 const dotenv = require("dotenv");
 dotenv.config();
 
@@ -13,6 +14,8 @@ const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN;
 
 const { protect } = require("./middleware/authMiddleware");
+
+// startTripStatusUpdater();
 
 const corsOption = {
   origin: CORS_ORIGIN,

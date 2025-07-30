@@ -304,6 +304,7 @@ const tripController = {
               name: true, 
             },
           },
+          locations: true,
         },
       });
   
@@ -313,7 +314,6 @@ const tripController = {
         return res.status(200).json({ trip });
   
     } catch (error) {
-      // ... (error handling) ...
     }
   },
 
