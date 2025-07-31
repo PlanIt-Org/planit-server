@@ -17,6 +17,10 @@ const commentController = {
         where: {
           tripId: tripId,
         },
+        include: {
+          author: true,
+          location: true,
+        }
       });
 
       res.status(200).json(comments);
@@ -30,13 +34,14 @@ const commentController = {
   // Example: Create a new comment
   createComment: async (req, res) => {
     try {
-      const { text, authorId, tripId } = req.body;
+      const { text, authorId, tripId, locationId } = req.body;
 
       const newComment = await prisma.comment.create({
         data: {
           text: text,
           authorId: authorId,
           tripId: tripId,
+          locationId : locationId,
         },
       });
 

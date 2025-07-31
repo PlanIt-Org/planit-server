@@ -98,6 +98,7 @@ const locationController = {
     }
   },
 
+
   // Example: Update a location
   updateLocation: async (req, res) => {
     // Controller logic here
