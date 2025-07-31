@@ -15,6 +15,7 @@ const {
   logout,
   searchUsers,
   ensureUserProfile,
+  updateProfilePicture,
 } = require("../controllers/userController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -40,12 +41,15 @@ router
   .delete(deleteUserPreferences);
 
 router.get("/past-trips", getUserPastTrips);
-
 router.get("/", getAllUsers);
+
+router.put("/profile-picture", updateProfilePicture);
 
 //Used by TripFilter
 router.get("/search", searchUsers);
 
 router.get("/:id", getUserById);
+
+router.put("/profile-picture", updateProfilePicture);
 
 module.exports = router;
