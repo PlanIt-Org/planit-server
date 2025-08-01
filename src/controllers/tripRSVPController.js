@@ -1,25 +1,33 @@
-// src/controllers/tripRSVPController.js
 const prisma = require("../db/db");
+
 /**
  * Controller for handling Trip RSVP related operations.
  */
 const tripRSVPController = {
   /**
    * Create a new Trip RSVP or update an existing one for the user and trip.
+   * @param {import('express').Request} req - Express request object
+   * @param {import('express').Response} res - Express response object
+   * @returns {Promise<void>}
    */
   createOrUpdateRSVP: async (req, res) => {
+    console.log("[createOrUpdateRSVP] called");
     const { tripId } = req.params;
-    const { status } = req.body; // e.g., "yes" or "no"
+    const { status } = req.body;
     const userId = req.user.id;
-
-    // 1. Convert incoming string to uppercase to match the Enum
+    console.log(
+      "[createOrUpdateRSVP] tripId:",
+      tripId,
+      "userId:",
+      userId,
+      "status:",
+      status
+    );
     const rsvpEnumStatus = status.toUpperCase();
-
-    // 2. Validate the converted status against the Enum values
     if (!["YES", "NO", "MAYBE"].includes(rsvpEnumStatus)) {
+      console.warn("[createOrUpdateRSVP] Invalid status provided:", status);
       return res.status(400).json({ message: "Invalid status provided." });
     }
-
     try {
       const rsvp = await prisma.tripRSVP.upsert({
         where: {
@@ -37,13 +45,13 @@ const tripRSVPController = {
           status: rsvpEnumStatus,
         },
       });
-
+      console.log("[createOrUpdateRSVP] RSVP upserted:", rsvp);
       return res.status(200).json({
         message: "RSVP processed successfully!",
         data: rsvp,
       });
     } catch (error) {
-      console.error("Error processing RSVP:", error);
+      console.error("[createOrUpdateRSVP] Error processing RSVP:", error);
       return res.status(500).json({
         message: "Failed to process RSVP.",
         error: error.message,
@@ -53,77 +61,90 @@ const tripRSVPController = {
 
   /**
    * Get all RSVPs for a specific trip, including the user data for each RSVP.
-   * This is useful for building a detailed guest list that shows everyone's status.
+   * Useful for building a detailed guest list that shows everyone's status.
+   * @param {import('express').Request} req - Express request object
+   * @param {import('express').Response} res - Express response object
+   * @returns {Promise<void>}
    */
   getTripRSVPs: async (req, res) => {
+    console.log("[getTripRSVPs] called");
     try {
       const { tripId } = req.params;
-      const rsvps = await db.tripRSVP.findMany({
+      console.log("[getTripRSVPs] tripId:", tripId);
+      const rsvps = await prisma.tripRSVP.findMany({
         where: { tripId },
         include: {
-          // Include the related user for each RSVP
           user: {
-            // Select only the fields you need for the frontend
             select: {
-              id: true,
-              name: true,
-              avatarUrl: true, // Assuming your User model has this field
+              select: {
+                id: true,
+                name: true,
+                profilePictureUrl: true,
+                email: true,
+              },
             },
           },
         },
       });
-
+      console.log("[getTripRSVPs] RSVPs found:", rsvps.length);
       res.status(200).json(rsvps);
     } catch (error) {
-      console.error("Error fetching trip RSVPs:", error);
+      console.error("[getTripRSVPs] Error fetching trip RSVPs:", error);
       res.status(500).json({ error: "Failed to retrieve trip RSVPs." });
     }
   },
 
   /**
    * Get attendees (users who RSVP'd 'YES') for a specific trip.
-   * This is perfect for populating a simple list of confirmed guests.
+   * Returns a list of confirmed guests.
+   * @param {import('express').Request} req - Express request object
+   * @param {import('express').Response} res - Express response object
+   * @returns {Promise<void>}
    */
   getTripAttendees: async (req, res) => {
+    console.log("[getTripAttendees] called");
     try {
       const { tripId } = req.params;
-      const attendees = await db.tripRSVP.findMany({
+      console.log("[getTripAttendees] tripId:", tripId);
+      const attendees = await prisma.tripRSVP.findMany({
         where: {
           tripId: tripId,
-          status: "YES", // Filter for only 'YES' status
+          status: "YES",
         },
         include: {
           user: {
             select: {
               id: true,
               name: true,
-              avatarUrl: true,
+              profilePictureUrl: true,
+              email: true,
             },
           },
         },
       });
-
-      // The result is an array of TripRSVP objects. We can map this
-      // to return a cleaner array of just the user objects.
       const userList = attendees.map((rsvp) => rsvp.user);
-
+      console.log("[getTripAttendees] Attendees found:", userList.length);
       res.status(200).json(userList);
     } catch (error) {
-      console.error("Error fetching trip attendees:", error);
+      console.error("[getTripAttendees] Error fetching trip attendees:", error);
       res.status(500).json({ error: "Failed to retrieve trip attendees." });
     }
   },
 
   /**
-   * Get all RSVPs for a specific user.
+   * Get all RSVPs for a specific user, including trip details.
+   * @param {import('express').Request} req - Express request object
+   * @param {import('express').Response} res - Express response object
+   * @returns {Promise<void>}
    */
   getUserRSVPs: async (req, res) => {
+    console.log("[getUserRSVPs] called");
     try {
       const { userId } = req.params;
-      const userRsvps = await db.tripRSVP.findMany({
+      console.log("[getUserRSVPs] userId:", userId);
+      const userRsvps = await prisma.tripRSVP.findMany({
         where: { userId },
         include: {
-          // Also include trip details for context
           trip: {
             select: {
               id: true,
@@ -133,16 +154,25 @@ const tripRSVPController = {
           },
         },
       });
+      console.log("[getUserRSVPs] RSVPs found:", userRsvps.length);
       res.status(200).json(userRsvps);
     } catch (error) {
-      console.error("Error fetching user RSVPs:", error);
+      console.error("[getUserRSVPs] Error fetching user RSVPs:", error);
       res.status(500).json({ error: "Failed to retrieve user RSVPs." });
     }
   },
 
+  /**
+   * Get a specific RSVP for the current user and trip.
+   * @param {import('express').Request} req - Express request object
+   * @param {import('express').Response} res - Express response object
+   * @returns {Promise<void>}
+   */
   getSpecificRSVP: async (req, res) => {
+    console.log("[getSpecificRSVP] called");
     const { tripId } = req.params;
     const userId = req.user.id;
+    console.log("[getSpecificRSVP] tripId:", tripId, "userId:", userId);
     try {
       const rsvp = await prisma.tripRSVP.findUnique({
         where: {
@@ -155,36 +185,67 @@ const tripRSVPController = {
           status: true,
         },
       });
-
       if (!rsvp) {
+        console.warn("[getSpecificRSVP] RSVP not found for user and trip");
         return res
           .status(404)
           .json({ message: "RSVP not found for this user and trip." });
       }
+      console.log("[getSpecificRSVP] RSVP found:", rsvp);
       return res.status(200).json(rsvp);
     } catch (error) {
-      console.error("Error fetching specific RSVP:", error);
+      console.error("[getSpecificRSVP] Error fetching specific RSVP:", error);
       return res
         .status(500)
         .json({ message: "Failed to retrieve RSVP status." });
     }
   },
 
-  // --- Other placeholder functions from your original file ---
+  /**
+   * Not implemented. Use getTripRSVPs with a tripId.
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   * @returns {Promise<void>}
+   */
   getAllTripRSVPs: async (req, res) => {
+    console.log("[getAllTripRSVPs] called");
     res
       .status(501)
       .json({ message: "Not implemented. Use getTripRSVPs with a tripId." });
   },
+
+  /**
+   * Not implemented yet.
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   * @returns {Promise<void>}
+   */
   getTripRSVPById: async (req, res) => {
+    console.log("[getTripRSVPById] called");
     res.status(501).json({ message: "Not implemented yet." });
   },
+
+  /**
+   * Not implemented. Use createOrUpdateRSVP.
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   * @returns {Promise<void>}
+   */
   updateTripRSVP: async (req, res) => {
+    console.log("[updateTripRSVP] called");
     res
       .status(501)
       .json({ message: "Not implemented. Use createOrUpdateRSVP." });
   },
+
+  /**
+   * Not implemented yet.
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   * @returns {Promise<void>}
+   */
   deleteTripRSVP: async (req, res) => {
+    console.log("[deleteTripRSVP] called");
     res.status(501).json({ message: "Not implemented yet." });
   },
 };
