@@ -245,8 +245,13 @@ const tripController = {
 
  toggleSaveTrip: async (req, res) => {
     const { tripId } = req.params;
-    // Get the user ID from your authentication middleware
     const userId = req.user?.id;
+
+
+    console.log("--- Toggle Save Request Received ---");
+    console.log("Backend received userId:", userId);
+    console.log("Backend received tripId:", tripId);
+    // ------------------------------------
 
     if (!userId) {
       return res.status(401).json({ message: "Authentication required." });
@@ -287,6 +292,62 @@ const tripController = {
     } catch (error) {
       console.error("Error toggling save trip:", error);
       return res.status(500).json({ message: "Failed to update trip." });
+    }
+  },
+
+
+   getSavedTrips: async (req, res) => {
+    // Get the user ID from your authentication middleware
+    const userId = req.user?.id;
+  
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required." });
+    }
+  
+    try {
+      const savedTrips = await prisma.trip.findMany({
+        where: {
+          savedByUsers: {
+            some: {
+              id: userId,
+            },
+          },
+        },
+        include: {
+          host: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          locations: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              image: true,
+            },
+          },
+          // It's important to include this so the heart icon is correctly filled
+          savedByUsers: {
+            where: {
+                id: userId
+            },
+            select: {
+                id: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+  
+      return res.status(200).json({ trips: savedTrips });
+  
+    } catch (error) {
+      console.error("Error fetching saved trips:", error);
+      return res.status(500).json({ message: "Failed to fetch saved trips." });
     }
   },
 
