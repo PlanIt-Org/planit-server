@@ -12,7 +12,7 @@ router.get("/", tripController.getAllTrips);
 
 router.get('/saved', tripController.getSavedTrips);
 
-
+router.get("/discover", tripController.discoverTrips);
 // Get trip by ID
 router.get("/:id", tripController.getTripById);
 

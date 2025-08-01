@@ -243,6 +243,63 @@ const tripController = {
   },
 
 
+  discoverTrips: async (req, res) => {
+    try {
+      const { userId } = getAuth(req);
+  
+      if (!userId) {
+        return res.status(401).json({
+          message: "Unauthorized. Please log in to discover trips.",
+          trips: [],
+        });
+      }
+  
+      const userPreferences = await prisma.userPreferences.findUnique({
+        where: { userId: userId },
+      });
+  
+      const query = {
+        where: {
+          private: false, 
+          status: { in: ['ACTIVE', 'COMPLETED'] }, 
+          hostId: { not: userId }, 
+        },
+        include: {
+          host: {
+            select: { id: true, name: true, profilePictureUrl: true },
+          },
+          locations: true,
+          savedByUsers: { where: { id: userId }, select: { id: true } },
+        },
+        orderBy: {
+          startTime: 'desc',
+        },
+        take: 50,
+      };
+  
+      if (userPreferences && userPreferences.location) {
+        console.log(`Filtering discover results for user ${userId} by city: ${userPreferences.location}`);
+        query.where.city = {
+          equals: userPreferences.location,
+          mode: 'insensitive', // Case-insensitive match for the city name
+        };
+      } else {
+        console.log(`User ${userId} has no location preference. Returning all public trips.`);
+      }
+        const trips = await prisma.trip.findMany(query);
+  
+      res.status(200).json({ trips });
+  
+    } catch (error) {
+      console.error("Error in discoverTrips controller:", error);
+      res.status(500).json({
+        message: "Failed to discover trips due to a server error.",
+        trips: [],
+      });
+    }
+  },
+
+
  toggleSaveTrip: async (req, res) => {
     const { tripId } = req.params;
     const userId = req.user?.id;
