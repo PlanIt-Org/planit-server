@@ -10,6 +10,9 @@ router.use(protect);
 // Get all trips
 router.get("/", tripController.getAllTrips);
 
+router.get('/saved', tripController.getSavedTrips);
+
+router.get("/discover", tripController.discoverTrips);
 // Get trip by ID
 router.get("/:id", tripController.getTripById);
 
@@ -37,11 +40,20 @@ router.delete("/:id/co-hosts/:userId", tripController.removeCoHost);
 // Add a guest to the proposed list
 router.post("/:tripId/proposed-guests", tripController.addProposedGuest);
 
+
+router.post('/:tripId/toggle-save', tripController.toggleSaveTrip);
+
 // get all trips by user
 router.get("/user/:userId", tripController.getTripsByUserId);
 
 // Add proposed guests to a trip
 router.post("/:id/guests", tripController.addProposedGuest);
+
+router.put('/:id', tripController.updateTripDetails);
+
+router.put('/:id/privacy', tripController.updateTripPrivacy);
+
+router.post('/:tripId/add-invited', tripController.addUserToInvitedList);
 
 // Remove proposed guests from a trip
 router.delete("/:id/guests/:guestId", tripController.removeProposedGuest);

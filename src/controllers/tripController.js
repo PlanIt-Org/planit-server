@@ -135,26 +135,73 @@ const tripController = {
     }
   },
 
+
+  addUserToInvitedList: async (req, res) => {
+    const { tripId } = req.params;
+    const { userId } = req.body; 
+  
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required." });
+    }
+  
+    try {
+      await prisma.trip.update({
+        where: { id: tripId },
+        data: {
+          invitedUsers: {
+            connect: { id: userId },
+          },
+        },
+      });
+  
+      return res.status(200).json({ message: "User added to invited list." });
+  
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ message: "Trip or User not found." });
+      }
+      console.error("Error adding user to invited list:", error);
+      return res.status(500).json({ message: "Failed to update trip." });
+    }
+  },
+
   getTripsByUserId: async (req, res) => {
     const { userId } = req.params;
 
-    try {
-      if (!userId) {
-        return res
-          .status(400)
-          .json({ message: "Missing userId in request params." });
-      }
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ message: "Missing userId in request params." });
+    }
 
+    try {
       const trips = await prisma.trip.findMany({
         where: {
-          hostId: userId,
+          OR: [
+            {
+              hostId: userId, 
+            },
+            {
+              invitedUsers: { 
+                some: {
+                  id: userId,
+                },
+              },
+            },
+            {
+              savedByUsers: {
+                some: {
+                  id: userId,
+                },
+              },
+            },
+          ],
         },
         include: {
           host: {
             select: {
               id: true,
               name: true,
-              email: true,
             },
           },
           locations: {
@@ -165,7 +212,21 @@ const tripController = {
               image: true,
             },
           },
+          invitedUsers: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          savedByUsers: {
+            select: {
+              id: true,
+            },
+          },
         },
+        orderBy: {
+            createdAt: 'desc'
+        }
       });
 
       return res.status(200).json({
@@ -181,9 +242,197 @@ const tripController = {
     }
   },
 
+
+  discoverTrips: async (req, res) => {
+    try {
+      const { userId } = getAuth(req);
+  
+      if (!userId) {
+        return res.status(401).json({
+          message: "Unauthorized. Please log in to discover trips.",
+          trips: [],
+        });
+      }
+  
+      const userPreferences = await prisma.userPreferences.findUnique({
+        where: { userId: userId },
+      });
+  
+      const query = {
+        where: {
+          private: false, 
+          status: { in: ['ACTIVE', 'COMPLETED'] }, 
+          hostId: { not: userId }, 
+        },
+        include: {
+          host: {
+            select: { id: true, name: true, profilePictureUrl: true },
+          },
+          locations: true,
+          savedByUsers: { where: { id: userId }, select: { id: true } },
+        },
+        orderBy: {
+          startTime: 'desc',
+        },
+        take: 50,
+      };
+  
+      if (userPreferences && userPreferences.location) {
+        console.log(`Filtering discover results for user ${userId} by city: ${userPreferences.location}`);
+        query.where.city = {
+          equals: userPreferences.location,
+          mode: 'insensitive', // Case-insensitive match for the city name
+        };
+      } else {
+        console.log(`User ${userId} has no location preference. Returning all public trips.`);
+      }
+        const trips = await prisma.trip.findMany(query);
+  
+      res.status(200).json({ trips });
+  
+    } catch (error) {
+      console.error("Error in discoverTrips controller:", error);
+      res.status(500).json({
+        message: "Failed to discover trips due to a server error.",
+        trips: [],
+      });
+    }
+  },
+
+
+ toggleSaveTrip: async (req, res) => {
+    const { tripId } = req.params;
+    const userId = req.user?.id;
+
+
+    console.log("--- Toggle Save Request Received ---");
+    console.log("Backend received userId:", userId);
+    console.log("Backend received tripId:", tripId);
+    // ------------------------------------
+
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required." });
+    }
+
+    try {
+      // First, find the trip to see if the current user has already saved it
+      const trip = await prisma.trip.findUnique({
+        where: { id: tripId },
+        select: {
+          savedByUsers: {
+            where: { id: userId },
+          },
+        },
+      });
+
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+
+      const isAlreadySaved = trip.savedByUsers.length > 0;
+
+      // Use a dynamic action: 'disconnect' if it's already saved, 'connect' otherwise
+      const action = isAlreadySaved ? 'disconnect' : 'connect';
+
+      await prisma.trip.update({
+        where: { id: tripId },
+        data: {
+          savedByUsers: {
+            [action]: { id: userId },
+          },
+        },
+      });
+
+      const message = isAlreadySaved ? "Trip unsaved." : "Trip saved.";
+      return res.status(200).json({ message });
+
+    } catch (error) {
+      console.error("Error toggling save trip:", error);
+      return res.status(500).json({ message: "Failed to update trip." });
+    }
+  },
+
+
+   getSavedTrips: async (req, res) => {
+    // Get the user ID from your authentication middleware
+    const userId = req.user?.id;
+  
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required." });
+    }
+  
+    try {
+      const savedTrips = await prisma.trip.findMany({
+        where: {
+          savedByUsers: {
+            some: {
+              id: userId,
+            },
+          },
+        },
+        include: {
+          host: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          locations: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              image: true,
+            },
+          },
+          // It's important to include this so the heart icon is correctly filled
+          savedByUsers: {
+            where: {
+                id: userId
+            },
+            select: {
+                id: true
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+  
+      return res.status(200).json({ trips: savedTrips });
+  
+    } catch (error) {
+      console.error("Error fetching saved trips:", error);
+      return res.status(500).json({ message: "Failed to fetch saved trips." });
+    }
+  },
+
+
   // Example: Get trip by ID
   getTripById: async (req, res) => {
-    // Controller logic here
+    const { id } = req.params;
+  
+    try {
+      const trip = await prisma.trip.findUnique({
+        where: { id: id },
+        include: {
+          host: {
+            select: {
+              name: true, 
+            },
+          },
+          locations: true,
+        },
+      });
+  
+      if (!trip) {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+        return res.status(200).json({ trip });
+  
+    } catch (error) {
+    }
   },
 
   getTripTimesById: async (req, res) => {
@@ -378,6 +627,54 @@ const tripController = {
     // Controller logic here
   },
 
+
+  updateTripDetails: async (req, res) => {
+    // 1. Get trip ID from URL parameters
+    const { id } = req.params;
+    
+    // 2. Get title and description from the request body
+    const { title, description } = req.body;
+  
+    // 3. Prepare an object with only the fields to be updated
+    const dataToUpdate = {};
+    if (title !== undefined) {
+      dataToUpdate.title = title;
+    }
+    if (description !== undefined) {
+      dataToUpdate.description = description;
+    }
+  
+    // 4. If there's nothing to update, return an error
+    if (Object.keys(dataToUpdate).length === 0) {
+      return res.status(400).json({ message: "No update data provided." });
+    }
+  
+    try {
+      // 5. Use Prisma to find the trip and update it with the new data
+      const updatedTrip = await prisma.trip.update({
+        where: { id: id },
+        data: dataToUpdate,
+      });
+  
+      return res.status(200).json({
+        message: "Trip updated successfully!",
+        trip: updatedTrip,
+      });
+  
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+      
+      // Handle other potential server errors
+      console.error("Error updating trip:", error);
+      return res.status(500).json({
+        message: "Failed to update trip.",
+        error: error.message,
+      });
+    }
+  },
+
   updateTripStatus: async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
@@ -462,6 +759,38 @@ const tripController = {
       return res
         .status(500)
         .json({ message: "Failed to add location to trip." });
+    }
+  },
+
+
+  updateTripPrivacy: async (req, res) => {
+    const { id } = req.params;
+    const { private: isPrivate } = req.body;
+  
+    if (typeof isPrivate !== 'boolean') {
+      return res.status(400).json({ message: "Invalid 'private' status provided. Must be a boolean." });
+    }
+  
+    try {
+      const updatedTrip = await prisma.trip.update({
+        where: { id: id },
+        data: { private: isPrivate },
+      });
+  
+      return res.status(200).json({
+        message: `Trip is now ${isPrivate ? 'private' : 'public'}.`,
+        trip: updatedTrip,
+      });
+  
+    } catch (error) {
+      if (error.code === 'P2025') {
+        return res.status(404).json({ message: "Trip not found." });
+      }
+      console.error("Error updating trip privacy:", error);
+      return res.status(500).json({
+        message: "Failed to update trip privacy.",
+        error: error.message,
+      });
     }
   },
 
