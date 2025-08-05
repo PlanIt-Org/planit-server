@@ -31,6 +31,7 @@ CREATE TABLE "Trip" (
     "status" "TripStatus" NOT NULL DEFAULT 'PLANNING',
     "maxGuests" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "locationOrder" TEXT[],
     "hostId" TEXT NOT NULL,
 
     CONSTRAINT "Trip_pkey" PRIMARY KEY ("id")

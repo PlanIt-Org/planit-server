@@ -37,8 +37,7 @@ router.delete("/:id/locations/:locationId", tripController.removeLocation);
 // Remove co-hosts from a trip
 router.delete("/:id/co-hosts/:userId", tripController.removeCoHost);
 
-
-
+router.put("/:id/locations/order", tripController.updateLocationOrder);
 
 router.post('/:tripId/toggle-save', tripController.toggleSaveTrip);
 
