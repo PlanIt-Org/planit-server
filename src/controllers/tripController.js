@@ -209,6 +209,19 @@ const tripController = {
         // We extract just the user information from each RSVP.
         const attendees = trip.rsvps.map(rsvp => rsvp.user);
         
+        // --- THIS IS THE FIX ---
+        // Check if a custom order has been saved for the locations.
+        if (trip.locationOrder && trip.locationOrder.length > 0 && trip.locations.length > 0) {
+          // Create a map for fast lookups (googlePlaceId -> location object).
+          const locationMap = new Map(trip.locations.map(loc => [loc.googlePlaceId, loc]));
+          
+          // Rebuild the trip.locations array in the correct order.
+          trip.locations = trip.locationOrder
+            .map(id => locationMap.get(id))
+            .filter(Boolean); // .filter(Boolean) safely removes any deleted locations.
+        }
+        // --- END OF THE FIX ---
+  
         // We create a new trip object for the frontend.
         return {
           ...trip,
