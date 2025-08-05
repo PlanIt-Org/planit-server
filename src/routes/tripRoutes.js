@@ -37,8 +37,7 @@ router.delete("/:id/locations/:locationId", tripController.removeLocation);
 // Remove co-hosts from a trip
 router.delete("/:id/co-hosts/:userId", tripController.removeCoHost);
 
-// Add a guest to the proposed list
-router.post("/:tripId/proposed-guests", tripController.addProposedGuest);
+
 
 
 router.post('/:tripId/toggle-save', tripController.toggleSaveTrip);
@@ -58,8 +57,8 @@ router.post('/:tripId/add-invited', tripController.addUserToInvitedList);
 // Remove proposed guests from a trip
 router.delete("/:id/guests/:guestId", tripController.removeProposedGuest);
 
-// Get proposed guests for a trip
-router.get("/:id/guests", tripController.getProposedGuests);
+// Get a guest to the proposed list
+router.get("/:tripId/proposed-guests", tripController.getProposedGuests);
 
 // Create a poll for a trip
 router.post("/:id/polls", tripController.createPoll);
@@ -94,5 +93,12 @@ router.get("/:id/schedule", tripController.getTripSchedule);
 router.put("/:id/schedule", tripController.updateTripSchedule);
 
 router.post("/suggestions/:userId", tripController.generateTripSuggestions);
+
+
+//Create TripPreference by tripID
+router.post("/:id/TripPreference", tripController.createOrReplaceTripPreference);
+
+//get TripPreference by TripId
+router.get("/:id/TripPreference", tripController.getTripPreference)
 
 module.exports = router;

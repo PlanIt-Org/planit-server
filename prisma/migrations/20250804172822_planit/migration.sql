@@ -138,6 +138,20 @@ CREATE TABLE "UserPreferences" (
 );
 
 -- CreateTable
+CREATE TABLE "TripPreference" (
+    "id" TEXT NOT NULL,
+    "tripId" TEXT NOT NULL,
+    "activityPreferences" JSONB,
+    "dietaryRestrictions" JSONB,
+    "lifestyleChoices" JSONB,
+    "budgetDistribution" JSONB,
+    "travelStyle" JSONB,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "TripPreference_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_SavedTrips" (
     "A" TEXT NOT NULL,
     "B" TEXT NOT NULL,
@@ -186,6 +200,9 @@ CREATE UNIQUE INDEX "PollResponse_pollId_userId_key" ON "PollResponse"("pollId",
 CREATE UNIQUE INDEX "UserPreferences_userId_key" ON "UserPreferences"("userId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "TripPreference_tripId_key" ON "TripPreference"("tripId");
+
+-- CreateIndex
 CREATE INDEX "_SavedTrips_B_index" ON "_SavedTrips"("B");
 
 -- CreateIndex
@@ -232,6 +249,9 @@ ALTER TABLE "PollResponse" ADD CONSTRAINT "PollResponse_userId_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "UserPreferences" ADD CONSTRAINT "UserPreferences_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TripPreference" ADD CONSTRAINT "TripPreference_tripId_fkey" FOREIGN KEY ("tripId") REFERENCES "Trip"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_SavedTrips" ADD CONSTRAINT "_SavedTrips_A_fkey" FOREIGN KEY ("A") REFERENCES "Trip"("id") ON DELETE CASCADE ON UPDATE CASCADE;

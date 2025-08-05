@@ -83,6 +83,7 @@ model Trip {
   coHosts       TripCoHost[] // Multiple hosts per trip
   polls         Poll[]      
   guestList     ProposedGuest[] // Proposed guests before RSVP
+  preferenceSummary TripPreference? //Only one TripPreference per a Trip
 }
 
 model Location {
@@ -211,4 +212,18 @@ model UserPreferences {
   travelStyle  String[] 
   accessibilityNeeds String[]
   preferredTransportation String[] 
+}
+
+model TripPreference {
+  id                  String @id @default(uuid())
+  tripId              String @unique
+  trip                Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  activityPreferences Json?  
+  dietaryRestrictions Json?  
+  lifestyleChoices    Json? 
+  budgetDistribution  Json? 
+  travelStyle         Json?
+
+  createdAt DateTime @default(now())
 }
