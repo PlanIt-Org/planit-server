@@ -165,60 +165,36 @@ const tripController = {
 
   getTripsByUserId: async (req, res) => {
     const { userId } = req.params;
-
-    if (!userId) {
-      return res
-        .status(400)
-        .json({ message: "Missing userId in request params." });
-    }
-
+  
     try {
+      // Step 1: Fetch all trips where the user is the host, has RSVP'd, or has saved the trip.
       const trips = await prisma.trip.findMany({
         where: {
           OR: [
-            {
-              hostId: userId,
-            },
-            {
-              invitedUsers: {
-                some: {
-                  id: userId,
-                },
-              },
-            },
-            {
-              savedByUsers: {
-                some: {
-                  id: userId,
-                },
-              },
-            },
+            { hostId: userId },
+            { rsvps: { some: { userId: userId } } },
+            { savedByUsers: { some: { id: userId } } },
           ],
         },
         include: {
-          host: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          locations: {
-            select: {
-              id: true,
-              name: true,
-              address: true,
-              image: true,
-            },
-          },
-          invitedUsers: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
+          // We need basic info for the trip cards.
+          host: { select: { id: true, name: true } }, 
+          // We need the FULL location objects for the modal.
+          locations: true, 
+          // We need this to correctly show the filled heart icon.
           savedByUsers: {
-            select: {
-              id: true,
+              select: { id: true }
+          },
+          // This is the new logic to dynamically get attendees.
+          rsvps: {
+            where: {
+              status: 'YES',
+            },
+            include: {
+              // For each "YES" RSVP, we include the user object.
+              user: { 
+                select: { id: true, name: true, email: true },
+              },
             },
           },
         },
@@ -226,17 +202,29 @@ const tripController = {
           createdAt: "desc",
         },
       });
-
-      return res.status(200).json({
-        message: "Trips for user fetched successfully!",
-        trips,
+  
+      // Step 2: Transform the data to match what the frontend TripGrid expects.
+      const formattedTrips = trips.map(trip => {
+        // The `rsvps` field now contains an array of RSVP objects for attendees.
+        // We extract just the user information from each RSVP.
+        const attendees = trip.rsvps.map(rsvp => rsvp.user);
+        
+        // We create a new trip object for the frontend.
+        return {
+          ...trip,
+          // We rename the `attendees` list to `invitedUsers` to match the prop
+          // that the TripGrid's "Upcoming" filter is expecting.
+          invitedUsers: attendees,
+          // We can now remove the raw rsvps data to keep the payload clean.
+          rsvps: undefined, 
+        };
       });
+  
+      res.status(200).json({ trips: formattedTrips });
+  
     } catch (error) {
-      console.error("Error fetching trips by user ID:", error);
-      return res.status(500).json({
-        message: "Failed to fetch user's trips.",
-        error: error.message,
-      });
+      console.error("Error fetching trips by user:", error);
+      res.status(500).json({ message: "An error occurred while fetching trips." });
     }
   },
 
@@ -408,27 +396,33 @@ const tripController = {
     try {
       const trip = await prisma.trip.findUnique({
         where: { id: req.params.id },
-        include: { 
-          locations: true, 
-        },
       });
   
       if (!trip) {
         return res.status(404).json({ message: "Trip not found." });
       }
   
-      // --- ADD THIS SORTING LOGIC ---
-      // Check if a custom order has been saved.
       if (trip.locationOrder && trip.locationOrder.length > 0) {
-        const locationMap = new Map(trip.locations.map(loc => [loc.googlePlaceId, loc]));
-        
-        trip.locations = trip.locationOrder
-          .map(id => locationMap.get(id))
-          .filter(Boolean); 
+        const orderedLocations = await prisma.location.findMany({
+          where: {
+            googlePlaceId: {
+              in: trip.locationOrder,
+            },
+          },
+        });
+  
+        const locationMap = new Map(orderedLocations.map(loc => [loc.googlePlaceId, loc]));
+        trip.locations = trip.locationOrder.map(id => locationMap.get(id)).filter(Boolean);
+  
+      } else {
+        const relatedLocations = await prisma.location.findMany({
+          where: { trips: { some: { id: req.params.id } } },
+        });
+        trip.locations = relatedLocations;
       }
-      // --- END OF SORTING LOGIC ---
   
       res.status(200).json({ trip });
+  
     } catch (error) {
       console.error("Error fetching trip by ID:", error);
       res.status(500).json({ message: "Failed to fetch trip." });
