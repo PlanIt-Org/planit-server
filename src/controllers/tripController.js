@@ -135,15 +135,14 @@ const tripController = {
     }
   },
 
-
   addUserToInvitedList: async (req, res) => {
     const { tripId } = req.params;
-    const { userId } = req.body; 
-  
+    const { userId } = req.body;
+
     if (!userId) {
       return res.status(400).json({ message: "User ID is required." });
     }
-  
+
     try {
       await prisma.trip.update({
         where: { id: tripId },
@@ -153,11 +152,10 @@ const tripController = {
           },
         },
       });
-  
+
       return res.status(200).json({ message: "User added to invited list." });
-  
     } catch (error) {
-      if (error.code === 'P2025') {
+      if (error.code === "P2025") {
         return res.status(404).json({ message: "Trip or User not found." });
       }
       console.error("Error adding user to invited list:", error);
@@ -179,10 +177,10 @@ const tripController = {
         where: {
           OR: [
             {
-              hostId: userId, 
+              hostId: userId,
             },
             {
-              invitedUsers: { 
+              invitedUsers: {
                 some: {
                   id: userId,
                 },
@@ -225,8 +223,8 @@ const tripController = {
           },
         },
         orderBy: {
-            createdAt: 'desc'
-        }
+          createdAt: "desc",
+        },
       });
 
       return res.status(200).json({
@@ -242,27 +240,26 @@ const tripController = {
     }
   },
 
-
   discoverTrips: async (req, res) => {
     try {
       const { userId } = getAuth(req);
-  
+
       if (!userId) {
         return res.status(401).json({
           message: "Unauthorized. Please log in to discover trips.",
           trips: [],
         });
       }
-  
+
       const userPreferences = await prisma.userPreferences.findUnique({
         where: { userId: userId },
       });
-  
+
       const query = {
         where: {
-          private: false, 
-          status: { in: ['ACTIVE', 'COMPLETED'] }, 
-          hostId: { not: userId }, 
+          private: false,
+          status: { in: ["ACTIVE", "COMPLETED"] },
+          hostId: { not: userId },
         },
         include: {
           host: {
@@ -272,24 +269,27 @@ const tripController = {
           savedByUsers: { where: { id: userId }, select: { id: true } },
         },
         orderBy: {
-          startTime: 'desc',
+          startTime: "desc",
         },
         take: 50,
       };
-  
+
       if (userPreferences && userPreferences.location) {
-        console.log(`Filtering discover results for user ${userId} by city: ${userPreferences.location}`);
+        console.log(
+          `Filtering discover results for user ${userId} by city: ${userPreferences.location}`
+        );
         query.where.city = {
           equals: userPreferences.location,
-          mode: 'insensitive', // Case-insensitive match for the city name
+          mode: "insensitive", // Case-insensitive match for the city name
         };
       } else {
-        console.log(`User ${userId} has no location preference. Returning all public trips.`);
+        console.log(
+          `User ${userId} has no location preference. Returning all public trips.`
+        );
       }
-        const trips = await prisma.trip.findMany(query);
-  
+      const trips = await prisma.trip.findMany(query);
+
       res.status(200).json({ trips });
-  
     } catch (error) {
       console.error("Error in discoverTrips controller:", error);
       res.status(500).json({
@@ -299,11 +299,9 @@ const tripController = {
     }
   },
 
-
- toggleSaveTrip: async (req, res) => {
+  toggleSaveTrip: async (req, res) => {
     const { tripId } = req.params;
     const userId = req.user?.id;
-
 
     console.log("--- Toggle Save Request Received ---");
     console.log("Backend received userId:", userId);
@@ -332,7 +330,7 @@ const tripController = {
       const isAlreadySaved = trip.savedByUsers.length > 0;
 
       // Use a dynamic action: 'disconnect' if it's already saved, 'connect' otherwise
-      const action = isAlreadySaved ? 'disconnect' : 'connect';
+      const action = isAlreadySaved ? "disconnect" : "connect";
 
       await prisma.trip.update({
         where: { id: tripId },
@@ -345,22 +343,20 @@ const tripController = {
 
       const message = isAlreadySaved ? "Trip unsaved." : "Trip saved.";
       return res.status(200).json({ message });
-
     } catch (error) {
       console.error("Error toggling save trip:", error);
       return res.status(500).json({ message: "Failed to update trip." });
     }
   },
 
-
-   getSavedTrips: async (req, res) => {
+  getSavedTrips: async (req, res) => {
     // Get the user ID from your authentication middleware
     const userId = req.user?.id;
-  
+
     if (!userId) {
       return res.status(401).json({ message: "Authentication required." });
     }
-  
+
     try {
       const savedTrips = await prisma.trip.findMany({
         where: {
@@ -388,51 +384,47 @@ const tripController = {
           // It's important to include this so the heart icon is correctly filled
           savedByUsers: {
             where: {
-                id: userId
+              id: userId,
             },
             select: {
-                id: true
-            }
-          }
+              id: true,
+            },
+          },
         },
         orderBy: {
-          createdAt: 'desc',
+          createdAt: "desc",
         },
       });
-  
+
       return res.status(200).json({ trips: savedTrips });
-  
     } catch (error) {
       console.error("Error fetching saved trips:", error);
       return res.status(500).json({ message: "Failed to fetch saved trips." });
     }
   },
 
-
   // Example: Get trip by ID
   getTripById: async (req, res) => {
     const { id } = req.params;
-  
+
     try {
       const trip = await prisma.trip.findUnique({
         where: { id: id },
         include: {
           host: {
             select: {
-              name: true, 
+              name: true,
             },
           },
           locations: true,
         },
       });
-  
+
       if (!trip) {
         return res.status(404).json({ message: "Trip not found." });
       }
-        return res.status(200).json({ trip });
-  
-    } catch (error) {
-    }
+      return res.status(200).json({ trip });
+    } catch (error) {}
   },
 
   getTripTimesById: async (req, res) => {
@@ -627,14 +619,13 @@ const tripController = {
     // Controller logic here
   },
 
-
   updateTripDetails: async (req, res) => {
     // 1. Get trip ID from URL parameters
     const { id } = req.params;
-    
+
     // 2. Get title and description from the request body
     const { title, description } = req.body;
-  
+
     // 3. Prepare an object with only the fields to be updated
     const dataToUpdate = {};
     if (title !== undefined) {
@@ -643,29 +634,28 @@ const tripController = {
     if (description !== undefined) {
       dataToUpdate.description = description;
     }
-  
+
     // 4. If there's nothing to update, return an error
     if (Object.keys(dataToUpdate).length === 0) {
       return res.status(400).json({ message: "No update data provided." });
     }
-  
+
     try {
       // 5. Use Prisma to find the trip and update it with the new data
       const updatedTrip = await prisma.trip.update({
         where: { id: id },
         data: dataToUpdate,
       });
-  
+
       return res.status(200).json({
         message: "Trip updated successfully!",
         trip: updatedTrip,
       });
-  
     } catch (error) {
-      if (error.code === 'P2025') {
+      if (error.code === "P2025") {
         return res.status(404).json({ message: "Trip not found." });
       }
-      
+
       // Handle other potential server errors
       console.error("Error updating trip:", error);
       return res.status(500).json({
@@ -762,28 +752,28 @@ const tripController = {
     }
   },
 
-
   updateTripPrivacy: async (req, res) => {
     const { id } = req.params;
     const { private: isPrivate } = req.body;
-  
-    if (typeof isPrivate !== 'boolean') {
-      return res.status(400).json({ message: "Invalid 'private' status provided. Must be a boolean." });
+
+    if (typeof isPrivate !== "boolean") {
+      return res.status(400).json({
+        message: "Invalid 'private' status provided. Must be a boolean.",
+      });
     }
-  
+
     try {
       const updatedTrip = await prisma.trip.update({
         where: { id: id },
         data: { private: isPrivate },
       });
-  
+
       return res.status(200).json({
-        message: `Trip is now ${isPrivate ? 'private' : 'public'}.`,
+        message: `Trip is now ${isPrivate ? "private" : "public"}.`,
         trip: updatedTrip,
       });
-  
     } catch (error) {
-      if (error.code === 'P2025') {
+      if (error.code === "P2025") {
         return res.status(404).json({ message: "Trip not found." });
       }
       console.error("Error updating trip privacy:", error);
@@ -954,24 +944,47 @@ const tripController = {
     // get time information
   },
   addProposedGuest: async (req, res) => {
+    const { id } = req.params; // tripId
+    const newGuestsArray = req.body;
+  
     try {
-      const { tripId } = req.params;
-      const guestsArray = req.body;
-
-      const guestsWithTripId = guestsArray.map((guest) => ({
-        name: guest.name,
-        email: guest.email,
-        tripId: tripId,
-      }));
-
-      const result = await prisma.proposedGuest.createMany({
-        data: guestsWithTripId,
+      // 1. FETCH all existing proposed guests for this trip to get their emails
+      const existingGuests = await prisma.proposedGuest.findMany({
+        where: { tripId: id },
+        select: { email: true }, // We only need the emails
       });
-
-      res.status(201).json(result);
+  
+      // Use a transaction to safely perform the delete and create operations
+      await prisma.$transaction(async (tx) => {
+        // 2. DELETE the old guests, but only if any exist
+        if (existingGuests.length > 0) {
+          const emailsToDelete = existingGuests.map(guest => guest.email);
+          await tx.proposedGuest.deleteMany({
+            where: {
+              tripId: id,
+              email: { in: emailsToDelete }, // Satisfy the client's rule
+            },
+          });
+        }
+  
+        // 3. CREATE the new list of guests, but only if the new list isn't empty
+        if (newGuestsArray.length > 0) {
+          const newGuestsData = newGuestsArray.map((guest) => ({
+            name: guest.name,
+            email: guest.email,
+            tripId: id,
+          }));
+          await tx.proposedGuest.createMany({
+            data: newGuestsData,
+          });
+        }
+      });
+  
+      res.status(201).json({ message: "Guests updated successfully." });
+  
     } catch (error) {
-      console.error("Failed to add proposezz guests:", error);
-      res.status(500).json({ error: "Could not add guests." });
+      console.error("Failed to replace proposed guests:", error);
+      res.status(500).json({ error: "Could not replace guests." });
     }
   },
 
@@ -1120,14 +1133,108 @@ Example of the required JSON structure:
       res.status(500).json({ message: "An internal server error occurred." });
     }
   },
+  createOrReplaceTripPreference: async (req, res) => {
+    const { id } = req.params;
+  
+    const {
+      activityPreferences   = {},
+      dietaryRestrictions   = {},
+      lifestyleChoices      = {},
+      budgetDistribution    = {},
+      travelStyle           = {},
+    } = req.body;
+  
+    try {
+      const result = await prisma.tripPreference.upsert({
+        where:  { tripId: id },
+        update: {
+          activityPreferences,
+          dietaryRestrictions,
+          lifestyleChoices,
+          budgetDistribution,
+          travelStyle,
+        },
+        create: {
+          tripId:                id,
+          activityPreferences,
+          dietaryRestrictions,
+          lifestyleChoices,
+          budgetDistribution,
+          travelStyle,
+        },
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error("Upsert failed:", error);
+      return res.status(500).json({ error: "Could not save trip preference." });
+    }
+  },
+  
+
+  getTripPreference: async (req, res) => {
+    const { id } = req.params; //tripId
+
+    try {
+      const result = await prisma.tripPreference.findUnique({
+        where: {
+          tripId: id,
+        },
+      });
+      if (!result) {
+        return res.status(404).json({ message: "Trip preference not found." });
+      }
+
+      res.status(200).json(result);
+    } catch (error) {
+      // console.error("Failed to get trip preference:", error);
+      // res.status(500).json({ error: "Could not get trip preference." });
+    }
+  },
 
   removeProposedGuest: async (req, res) => {
-    // TODO: Implement removeProposedGuest logic
+  
     res.status(501).json({ message: "Not implemented yet" });
   },
   getProposedGuests: async (req, res) => {
-    // TODO: Implement getProposedGuests logic
-    res.status(501).json({ message: "Not implemented yet" });
+    const { id } = req.params; 
+  
+    try {
+
+      const proposedGuests = await prisma.proposedGuest.findMany({
+        where: {
+          tripId: id,
+        },
+        select: { 
+          email: true,
+        },
+      });
+  
+      if (!proposedGuests || proposedGuests.length === 0) {
+   
+        return res.status(200).json([]);
+      }
+  
+      const guestEmails = proposedGuests.map((guest) => guest.email);
+  
+
+      const fullGuestProfiles = await prisma.user.findMany({
+        where: {
+          email: {
+            in: guestEmails, 
+          },
+        },
+     
+        include: {
+          userPreferences: true,
+        },
+      });
+  
+      res.status(200).json(fullGuestProfiles);
+  
+    } catch (error) {
+      console.error("Failed to get proposed guests:", error);
+      res.status(500).json({ error: "Could not get proposed guests." });
+    }
   },
   getTripPolls: async (req, res) => {
     // TODO: Implement getTripPolls logic

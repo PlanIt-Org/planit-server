@@ -1,207 +1,248 @@
-// const { PrismaClient, RSVPStatus, TripStatus } = require('@prisma/client');
-// const prisma = new PrismaClient();
+import { PrismaClient, RSVPStatus, TripStatus } from '@prisma/client';
 
-// async function main() {
-//   console.log('Seeding database...');
+// Initialize the Prisma Client
+const prisma = new PrismaClient();
 
-//   // Clean up existing data to prevent unique constraint errors
-//   await prisma.tripRSVP.deleteMany();
-//   await prisma.tripCoHost.deleteMany();
-//   await prisma.comment.deleteMany();
-//   await prisma.pollResponse.deleteMany();
-//   await prisma.poll.deleteMany();
-//   await prisma.proposedGuest.deleteMany();
-//   await prisma.trip.deleteMany();
-//   await prisma.userPreferences.deleteMany();
-//   await prisma.user.deleteMany();
-//   await prisma.location.deleteMany();
+async function main() {
+  console.log('🌱 Start seeding...');
 
-//   // --- 1. Create Users (Updated to match your screenshot) ---
-//   console.log('Creating users...');
-//   const user1 = await prisma.user.create({
-//     data: {
-//       id: 'd209fde6-fd95-474b-b019-a6cbb475e12d', // From screenshot
-//       email: 'bob12345@gmail.com',                 // From screenshot
-//       name: 'Alice',
-//       phoneNumber: '1112223333',
-//     },
-//   });
+  // -----------------
+  // --- CLEANUP ---
+  // -----------------
+  console.log('🧹 Clearing existing data...');
+  // Delete records in an order that respects foreign key constraints
+  await prisma.pollResponse.deleteMany();
+  await prisma.poll.deleteMany();
+  await prisma.tripCoHost.deleteMany();
+  await prisma.tripRSVP.deleteMany();
+  await prisma.comment.deleteMany();
+  await prisma.proposedGuest.deleteMany();
+  await prisma.tripPreference.deleteMany();
+  await prisma.userPreferences.deleteMany();
 
-//   const user2 = await prisma.user.create({
-//     data: {
-//       id: '43f6f392-4068-468f-a56c-c6233e6dbe0b', // From screenshot
-//       email: 'bob@gmail.com',                      // From screenshot
-//       name: 'Bob',
-//     },
-//   });
+  // Disconnect Many-to-Many relations before deleting parent records
+  const trips = await prisma.trip.findMany({ select: { id: true } });
+  for (const trip of trips) {
+    await prisma.trip.update({
+      where: { id: trip.id },
+      data: {
+        savedByUsers: { set: [] },
+        invitedUsers: { set: [] },
+        locations: { set: [] },
+      },
+    });
+  }
 
-//   const user3 = await prisma.user.create({
-//     data: {
-//       id: 'e8d60fd5-8f63-440e-86fd-890fc5f9c6aa6', // From screenshot
-//       email: 'test@test.com',                      // From screenshot
-//       name: 'Charlie',
-//     },
-//   });
+  await prisma.trip.deleteMany();
+  await prisma.location.deleteMany();
+  await prisma.user.deleteMany();
+  console.log('🗑️ Database cleared.');
 
-//   const user4 = await prisma.user.create({
-//     data: {
-//       id: '029bd684-b0d1-4bd1-9c88-75a480668ca5', // From screenshot
-//       email: 'morluindii@gmail.com',               // From screenshot
-//       name: 'Diana',
-//       phoneNumber: '4445556666',
-//     },
-//   });
+  // -------------------------------------
+  // --- CREATE USERS & PREFERENCES ---
+  // -------------------------------------
+  console.log('🙋 Creating users and their preferences...');
 
-//   const user5 = await prisma.user.create({
-//     data: {
-//       id: 'c549b0d7-e385-4b6b-976b-a2f7ee5ff04e', // From screenshot
-//       email: 'tsibilly@salesforce.com',            // From screenshot
-//       name: 'Thomas ',
-//     },
-//   });
+  // User 1: Alice - The cultural organizer
+  const alice = await prisma.user.create({
+    data: {
+      id: 'user_alice_123',
+      email: 'alice@example.com',
+      name: 'Alice Johnson',
+      profilePictureUrl: 'https://i.pravatar.cc/150?u=alice',
+      userPreferences: {
+        create: {
+          age: 30,
+          location: 'San Francisco, CA',
+          dietaryRestrictions: ['Vegetarian', 'Dairy-Free'],
+          activityPreferences: ['Museums & Art Galleries', 'Restaurants & Dining', 'Live Music & Concerts'],
+          budget: '3',
+          typicalTripLength: 'Weekend',
+          planningRole: 'The Organizer',
+          typicalAudience: ['Friends', 'Partner'],
+          lifestyleChoices: ['Early Bird', 'Cultural'],
+          travelStyle: ['Relaxed', 'Day Trips'],
+          accessibilityNeeds: ['Wheelchair Accessible'],
+          preferredTransportation: ['Public Transit', 'Ride-sharing'],
+        },
+      },
+    },
+  });
 
+  // User 2: Bob - The adventurous foodie
+  const bob = await prisma.user.create({
+    data: {
+      id: 'user_bob_456',
+      email: 'bob@example.com',
+      name: 'Bob Williams',
+      profilePictureUrl: 'https://i.pravatar.cc/150?u=bob',
+      userPreferences: {
+        create: {
+          age: 32,
+          location: 'Oakland, CA',
+          dietaryRestrictions: ['Pescatarian'],
+          activityPreferences: ['Outdoor Activities & Parks', 'Restaurants & Dining', 'Sports & Recreation'],
+          budget: '4',
+          planningRole: 'The Adventurous One',
+          typicalAudience: ['Friends'],
+          lifestyleChoices: ['Active', 'Adventurous'],
+          travelStyle: ['Quick Hangouts'],
+        },
+      },
+    },
+  });
 
-//   // --- 2. Create Locations ---
-//   console.log('Creating locations...');
-//   const locationSF = await prisma.location.create({
-//     data: {
-//       googlePlaceId: 'ChIJIQBpAG2ahYAR_6128GcTUEo',
-//       name: 'San Francisco',
-//       address: 'San Francisco, CA, USA',
-//       latitude: 37.7749,
-//       longitude: -122.4194,
-//       types: ['locality', 'political'],
-//     },
-//   });
+  // User 3: Charlie - The social night owl
+  const charlie = await prisma.user.create({
+    data: {
+      id: 'user_charlie_789',
+      email: 'charlie@example.com',
+      name: 'Charlie Brown',
+      profilePictureUrl: 'https://i.pravatar.cc/150?u=charlie',
+      userPreferences: {
+        create: {
+          age: 28,
+          dietaryRestrictions: ['Vegan'],
+          activityPreferences: ['Bars & Nightlife', 'Unique & Trendy Spots', 'Shopping'],
+          budget: '2',
+          planningRole: 'The Follower',
+          typicalAudience: ['Anyone'],
+          lifestyleChoices: ['Social', 'Night Owl'],
+          travelStyle: ['Relaxed'],
+        },
+      },
+    },
+  });
 
-//   const locationLA = await prisma.location.create({
-//     data: {
-//       googlePlaceId: 'ChIJE9on3F3HwoAR9AhGJW_fL-I',
-//       name: 'Los Angeles',
-//       address: 'Los Angeles, CA, USA',
-//       latitude: 34.0522,
-//       longitude: -118.2437,
-//       types: ['locality', 'political'],
-//     },
-//   });
+  console.log(`Created ${await prisma.user.count()} users.`);
 
-//   // --- 3. Create a Trip with Nested Relations ---
-//   console.log('Creating a trip with nested data...');
-//   const trip1 = await prisma.trip.create({
-//     data: {
-//       title: 'California Road Trip',
-//       description: 'An epic road trip from SF to LA.',
-//       city: 'California',
-//       status: TripStatus.PLANNING,
-//       host: { connect: { id: user1.id } },
-//       locations: { connect: [{ id: locationSF.id }, { id: locationLA.id }] },
-//       guestList: {
-//         createMany: {
-//           data: [
-//             { email: 'guest1@example.com', name: 'Guest One' },
-//             { email: 'guest2@example.com', name: 'Guest Two' },
-//           ],
-//         },
-//       },
-//       coHosts: {
-//         create: { user: { connect: { id: user2.id } } },
-//       },
-//       rsvps: {
-//         create: [
-//           { user: { connect: { id: user2.id } }, status: RSVPStatus.YES },
-//           { user: { connect: { id: user3.id } }, status: RSVPStatus.MAYBE },
-//         ],
-//       },
-//       comments: {
-//         create: {
-//           text: 'This is going to be so much fun!',
-//           author: { connect: { id: user2.id } },
-//           location: { connect: { id: locationSF.id } },
-//         },
-//       },
-//       polls: {
-//         create: {
-//           question: 'What should we eat for dinner on the first night?',
-//           options: ['Pizza', 'Tacos', 'Sushi'],
-//           responses: {
-//             create: [
-//               { user: { connect: { id: user1.id } }, option: 'Tacos' },
-//               { user: { connect: { id: user2.id } }, option: 'Tacos' },
-//               { user: { connect: { id: user3.id } }, option: 'Sushi' },
-//             ],
-//           },
-//         },
-//       },
-//     },
-//   });
+  // --------------------------
+  // --- CREATE LOCATIONS ---
+  // --------------------------
+  console.log('📍 Creating locations...');
+  
 
-//   // --- 4. Create User Preferences for ALL users ---
-//   console.log('Creating user preferences...');
-//   // Preferences for user1 (bob12345@gmail.com)
-//   await prisma.userPreferences.create({
-//     data: {
-//       user: { connect: { id: user1.id } },
-//       age: 30,
-//       dietaryRestrictions: ['Vegetarian'],
-//       location: 'San Francisco',
-//       activityPreferences: ['hiking', 'museums', 'reading'],
-//       budget: '3',
-//       travelStyle: ['Relaxing', 'Cultural'],
-//     },
-//   });
-//   // Preferences for user2 (bob@gmail.com)
-//   await prisma.userPreferences.create({
-//     data: {
-//       user: { connect: { id: user2.id } },
-//       age: 25,
-//       activityPreferences: ['concerts', 'dining out', 'nightlife'],
-//       budget: '4',
-//       travelStyle: ['Adventurous', 'Spontaneous'],
-//       preferredTransportation: ['Rideshare'],
-//     },
-//   });
-//   // Preferences for user3 (test@test.com)
-//   await prisma.userPreferences.create({
-//     data: {
-//       user: { connect: { id: user3.id } },
-//       age: 42,
-//       dietaryRestrictions: ['Gluten-Free'],
-//       activityPreferences: ['sightseeing', 'photography'],
-//       budget: '2',
-//       travelStyle: ['Family-Friendly', 'Planned'],
-//     },
-//   });
-//   // Preferences for user4 (morluindii@gmail.com)
-//   await prisma.userPreferences.create({
-//     data: {
-//       user: { connect: { id: user4.id } },
-//       age: 28,
-//       activityPreferences: ['shopping', 'spa', 'beach'],
-//       budget: '4',
-//       travelStyle: ['Luxury', 'Relaxing'],
-//       accessibilityNeeds: ['Wheelchair accessible venues'],
-//     },
-//   });
-//   // Preferences for user5 (tsibilly@salesforce.com)
-//   await prisma.userPreferences.create({
-//     data: {
-//       user: { connect: { id: user5.id } },
-//       age: 35,
-//       activityPreferences: ['hiking', 'camping', 'nature'],
-//       budget: '1',
-//       travelStyle: ['Budget-Friendly', 'Adventurous'],
-//     },
-//   });
+  const ferryBuilding = await prisma.location.create({
+    data: {
+      googlePlaceId: 'ChIJV4xx23B-j4ARLg3yYW6dGvA',
+      name: 'Ferry Building Marketplace',
+      address: '1 Ferry Building, San Francisco, CA 94111, USA',
+      latitude: 37.7955,
+      longitude: -122.3937,
+      types: ['meal_takeaway', 'restaurant', 'food', 'point_of_interest'],
+    },
+  });
 
+  const goldenGatePark = await prisma.location.create({
+    data: {
+      googlePlaceId: 'ChIJvX_3d1p_j4ARlY2B6nL4w6s',
+      name: 'Golden Gate Park',
+      address: 'San Francisco, CA, USA',
+      latitude: 37.7694,
+      longitude: -122.4862,
+      types: ['park', 'tourist_attraction'],
+    },
+  });
 
-//   console.log('Seeding finished.');
-// }
+  console.log(`Created ${await prisma.location.count()} locations.`);
 
-// main()
-//   .catch((e) => {
-//     console.error(e);
-//     process.exit(1);
-//   })
-//   .finally(async () => {
-//     await prisma.$disconnect();
-//   });
+  // ----------------------------------------------------
+  // --- CREATE TRIP & AGGREGATE PREFERENCES ---
+  // ----------------------------------------------------
+  console.log('✈️ Creating trip and its aggregated preference summary...');
+
+  // Create a trip and invite all users
+  const trip1 = await prisma.trip.create({
+    data: {
+      title: 'SF Weekend Exploration',
+      description: 'A weekend trip to see the best of San Francisco!',
+      city: 'San Francisco',
+      status: TripStatus.PLANNING,
+      private: false,
+      host: { connect: { id: alice.id } },
+      invitedUsers: {
+        connect: [{ id: alice.id }, { id: bob.id }, { id: charlie.id }],
+      },
+      locations: {
+        connect: [{ id: ferryBuilding.id }, { id: goldenGatePark.id }],
+      },
+    },
+    // We must include relations to perform the aggregation below
+    include: {
+      invitedUsers: { include: { userPreferences: true } },
+    },
+  });
+
+  // --- Aggregate Preferences Logic ---
+  const preferenceData = {
+    activityPreferences: {},
+    dietaryRestrictions: {},
+    lifestyleChoices: {},
+    travelStyle: {},
+    budgetDistribution: { '1': 0, '2': 0, '3': 0, '4': 0 },
+  };
+
+  for (const guest of trip1.invitedUsers) {
+    const prefs = guest.userPreferences;
+    if (!prefs) continue;
+
+    prefs.activityPreferences.forEach(p => {
+      preferenceData.activityPreferences[p] = (preferenceData.activityPreferences[p] || 0) + 1;
+    });
+    prefs.dietaryRestrictions.forEach(p => {
+      preferenceData.dietaryRestrictions[p] = (preferenceData.dietaryRestrictions[p] || 0) + 1;
+    });
+    prefs.lifestyleChoices.forEach(p => {
+      preferenceData.lifestyleChoices[p] = (preferenceData.lifestyleChoices[p] || 0) + 1;
+    });
+     prefs.travelStyle.forEach(p => {
+      preferenceData.travelStyle[p] = (preferenceData.travelStyle[p] || 0) + 1;
+    });
+    if (prefs.budget && preferenceData.budgetDistribution[prefs.budget] !== undefined) {
+      preferenceData.budgetDistribution[prefs.budget]++;
+    }
+  }
+
+  // Create the TripPreference record with the aggregated data
+  await prisma.tripPreference.create({
+    data: {
+      tripId: trip1.id,
+      activityPreferences: preferenceData.activityPreferences,
+      dietaryRestrictions: preferenceData.dietaryRestrictions,
+      lifestyleChoices: preferenceData.lifestyleChoices,
+      travelStyle: preferenceData.travelStyle,
+      budgetDistribution: preferenceData.budgetDistribution,
+    },
+  });
+
+  console.log('📊 Trip preference summary created.');
+
+  // ---------------------------------
+  // --- CREATE SUPPORTING DATA ---
+  // ---------------------------------
+  console.log('📝 Creating RSVPs and comments...');
+
+  await prisma.tripRSVP.create({ data: { tripId: trip1.id, userId: alice.id, status: RSVPStatus.YES } });
+  await prisma.tripRSVP.create({ data: { tripId: trip1.id, userId: bob.id, status: RSVPStatus.YES } });
+  await prisma.tripRSVP.create({ data: { tripId: trip1.id, userId: charlie.id, status: RSVPStatus.MAYBE } });
+
+  await prisma.comment.create({
+    data: {
+      text: "So excited for this! Can't wait for the Ferry Building.",
+      authorId: alice.id,
+      tripId: trip1.id,
+      locationId: ferryBuilding.id,
+    },
+  });
+
+  console.log('✅ Seeding finished successfully!');
+}
+
+main()
+  .catch((e) => {
+    console.error('❌ An error occurred while seeding the database:', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });
