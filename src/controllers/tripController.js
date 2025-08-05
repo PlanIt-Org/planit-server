@@ -405,26 +405,34 @@ const tripController = {
 
   // Example: Get trip by ID
   getTripById: async (req, res) => {
-    const { id } = req.params;
-
     try {
       const trip = await prisma.trip.findUnique({
-        where: { id: id },
-        include: {
-          host: {
-            select: {
-              name: true,
-            },
-          },
-          locations: true,
+        where: { id: req.params.id },
+        include: { 
+          locations: true, 
         },
       });
-
+  
       if (!trip) {
         return res.status(404).json({ message: "Trip not found." });
       }
-      return res.status(200).json({ trip });
-    } catch (error) {}
+  
+      // --- ADD THIS SORTING LOGIC ---
+      // Check if a custom order has been saved.
+      if (trip.locationOrder && trip.locationOrder.length > 0) {
+        const locationMap = new Map(trip.locations.map(loc => [loc.googlePlaceId, loc]));
+        
+        trip.locations = trip.locationOrder
+          .map(id => locationMap.get(id))
+          .filter(Boolean); 
+      }
+      // --- END OF SORTING LOGIC ---
+  
+      res.status(200).json({ trip });
+    } catch (error) {
+      console.error("Error fetching trip by ID:", error);
+      res.status(500).json({ message: "Failed to fetch trip." });
+    }
   },
 
   getTripTimesById: async (req, res) => {
@@ -688,6 +696,34 @@ const tripController = {
     }
   },
 
+  updateLocationOrder: async (req, res) => {
+    const tripId = req.params.id;
+    const { locationIds } = req.body;
+  
+    if (!locationIds || !Array.isArray(locationIds)) {
+      return res.status(400).json({ message: "Invalid request: locationIds array is required." });
+    }
+  
+    try {
+      // This is now a single, simple update operation.
+      await prisma.trip.update({
+        where: {
+          id: tripId,
+        },
+        data: {
+          // It sets the locationOrder field to the new array of IDs.
+          locationOrder: locationIds,
+        },
+      });
+  
+      res.status(200).json({ message: "Location order updated successfully." });
+  
+    } catch (error) {
+      console.error("Failed to update location order:", error);
+      res.status(500).json({ message: "An error occurred while saving the new order." });
+    }
+  },
+
   addLocationToTrip: async (req, res) => {
     try {
       const { tripId } = req.params;
@@ -946,19 +982,19 @@ const tripController = {
   addProposedGuest: async (req, res) => {
     const { id } = req.params; // tripId
     const newGuestsArray = req.body;
-  
+
     try {
       // 1. FETCH all existing proposed guests for this trip to get their emails
       const existingGuests = await prisma.proposedGuest.findMany({
         where: { tripId: id },
         select: { email: true }, // We only need the emails
       });
-  
+
       // Use a transaction to safely perform the delete and create operations
       await prisma.$transaction(async (tx) => {
         // 2. DELETE the old guests, but only if any exist
         if (existingGuests.length > 0) {
-          const emailsToDelete = existingGuests.map(guest => guest.email);
+          const emailsToDelete = existingGuests.map((guest) => guest.email);
           await tx.proposedGuest.deleteMany({
             where: {
               tripId: id,
@@ -966,7 +1002,7 @@ const tripController = {
             },
           });
         }
-  
+
         // 3. CREATE the new list of guests, but only if the new list isn't empty
         if (newGuestsArray.length > 0) {
           const newGuestsData = newGuestsArray.map((guest) => ({
@@ -979,9 +1015,8 @@ const tripController = {
           });
         }
       });
-  
+
       res.status(201).json({ message: "Guests updated successfully." });
-  
     } catch (error) {
       console.error("Failed to replace proposed guests:", error);
       res.status(500).json({ error: "Could not replace guests." });
@@ -1135,18 +1170,18 @@ Example of the required JSON structure:
   },
   createOrReplaceTripPreference: async (req, res) => {
     const { id } = req.params;
-  
+
     const {
-      activityPreferences   = {},
-      dietaryRestrictions   = {},
-      lifestyleChoices      = {},
-      budgetDistribution    = {},
-      travelStyle           = {},
+      activityPreferences = {},
+      dietaryRestrictions = {},
+      lifestyleChoices = {},
+      budgetDistribution = {},
+      travelStyle = {},
     } = req.body;
-  
+
     try {
       const result = await prisma.tripPreference.upsert({
-        where:  { tripId: id },
+        where: { tripId: id },
         update: {
           activityPreferences,
           dietaryRestrictions,
@@ -1155,7 +1190,7 @@ Example of the required JSON structure:
           travelStyle,
         },
         create: {
-          tripId:                id,
+          tripId: id,
           activityPreferences,
           dietaryRestrictions,
           lifestyleChoices,
@@ -1169,7 +1204,6 @@ Example of the required JSON structure:
       return res.status(500).json({ error: "Could not save trip preference." });
     }
   },
-  
 
   getTripPreference: async (req, res) => {
     const { id } = req.params; //tripId
@@ -1192,45 +1226,40 @@ Example of the required JSON structure:
   },
 
   removeProposedGuest: async (req, res) => {
-  
     res.status(501).json({ message: "Not implemented yet" });
   },
   getProposedGuests: async (req, res) => {
-    const { id } = req.params; 
-  
-    try {
+    const { id } = req.params;
 
+    try {
       const proposedGuests = await prisma.proposedGuest.findMany({
         where: {
           tripId: id,
         },
-        select: { 
+        select: {
           email: true,
         },
       });
-  
+
       if (!proposedGuests || proposedGuests.length === 0) {
-   
         return res.status(200).json([]);
       }
-  
+
       const guestEmails = proposedGuests.map((guest) => guest.email);
-  
 
       const fullGuestProfiles = await prisma.user.findMany({
         where: {
           email: {
-            in: guestEmails, 
+            in: guestEmails,
           },
         },
-     
+
         include: {
           userPreferences: true,
         },
       });
-  
+
       res.status(200).json(fullGuestProfiles);
-  
     } catch (error) {
       console.error("Failed to get proposed guests:", error);
       res.status(500).json({ error: "Could not get proposed guests." });

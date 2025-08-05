@@ -68,6 +68,7 @@ model Trip {
   status        TripStatus @default(PLANNING)
   maxGuests     Int?
   createdAt DateTime @default(now())
+  locationOrder String[]
 
   // isTemplate    Boolean   @default(false) // For sharing past trips
   
