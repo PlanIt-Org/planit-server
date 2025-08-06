@@ -23,17 +23,15 @@ const { protect } = require("../middleware/authMiddleware");
 
 // --- Public Routes (No authentication required) ---
 router.post("/create", createUser);
-router.post("/reset-password", resetPassword);
 router.post("/logout", logout);
 
 // --- Authentication Middleware ---
 // Any route defined BELOW this line will be protected and require a token.
 router.use(protect);
-
 // --- Protected Routes ---
 // Routes for logged-in users.
 router.post("/ensure-profile", ensureUserProfile);
-
+router.post("/reset-password", resetPassword);
 router.route("/me").get(getCurrentUser).put(updateCurrentUser);
 router.put("/username", updateUsername);
 
