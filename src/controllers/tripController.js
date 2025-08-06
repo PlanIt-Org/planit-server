@@ -39,10 +39,16 @@ const extractAndParseJson = (text) => {
   }
 };
 
-const formatDataForPrompt = (preferences, trips) => {
+const formatDataForPrompt = (preferences, trips, groupPreferences = null) => {
   let prompt = "Here is the user's data:\n";
   prompt += "--- User Preferences ---\n";
   prompt += JSON.stringify(preferences, null, 2);
+
+  if (groupPreferences) {
+    prompt += "\n\n--- Group Trip Preferences ---\n";
+    prompt += JSON.stringify(groupPreferences, null, 2);
+  }
+
   prompt += "\n\n--- User's Past Trips ---\n";
   if (trips.length > 0) {
     const tripSummaries = trips.map((t) => ({
@@ -58,6 +64,7 @@ const formatDataForPrompt = (preferences, trips) => {
 };
 
 const tripController = {
+  // ... (keep all other controller methods as they are)
   getAllTrips: async (req, res) => {
     try {
       const trips = await prisma.trip.findMany({
@@ -135,15 +142,14 @@ const tripController = {
     }
   },
 
-
   addUserToInvitedList: async (req, res) => {
     const { tripId } = req.params;
-    const { userId } = req.body; 
-  
+    const { userId } = req.body;
+
     if (!userId) {
       return res.status(400).json({ message: "User ID is required." });
     }
-  
+
     try {
       await prisma.trip.update({
         where: { id: tripId },
@@ -153,11 +159,10 @@ const tripController = {
           },
         },
       });
-  
+
       return res.status(200).json({ message: "User added to invited list." });
-  
     } catch (error) {
-      if (error.code === 'P2025') {
+      if (error.code === "P2025") {
         return res.status(404).json({ message: "Trip or User not found." });
       }
       console.error("Error adding user to invited list:", error);
@@ -168,101 +173,108 @@ const tripController = {
   getTripsByUserId: async (req, res) => {
     const { userId } = req.params;
 
-    if (!userId) {
-      return res
-        .status(400)
-        .json({ message: "Missing userId in request params." });
-    }
-
     try {
+      // Step 1: Fetch all trips where the user is the host, has RSVP'd, or has saved the trip.
       const trips = await prisma.trip.findMany({
         where: {
           OR: [
-            {
-              hostId: userId, 
-            },
-            {
-              invitedUsers: { 
-                some: {
-                  id: userId,
-                },
-              },
-            },
-            {
-              savedByUsers: {
-                some: {
-                  id: userId,
-                },
-              },
-            },
+            { hostId: userId },
+            { rsvps: { some: { userId: userId } } },
+            { savedByUsers: { some: { id: userId } } },
           ],
         },
         include: {
-          host: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          locations: {
-            select: {
-              id: true,
-              name: true,
-              address: true,
-              image: true,
-            },
-          },
-          invitedUsers: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
+          // We need basic info for the trip cards.
+          host: { select: { id: true, name: true } },
+          // We need the FULL location objects for the modal.
+          locations: true,
+          // We need this to correctly show the filled heart icon.
           savedByUsers: {
-            select: {
-              id: true,
+            select: { id: true },
+          },
+          // This is the new logic to dynamically get attendees.
+          rsvps: {
+            where: {
+              status: "YES",
+            },
+            include: {
+              // For each "YES" RSVP, we include the user object.
+              user: {
+                select: { id: true, name: true, email: true },
+              },
             },
           },
         },
         orderBy: {
-            createdAt: 'desc'
-        }
+          createdAt: "desc",
+        },
       });
 
-      return res.status(200).json({
-        message: "Trips for user fetched successfully!",
-        trips,
+      // Step 2: Transform the data to match what the frontend TripGrid expects.
+      const formattedTrips = trips.map((trip) => {
+        // The `rsvps` field now contains an array of RSVP objects for attendees.
+        // We extract just the user information from each RSVP.
+        const attendees = trip.rsvps.map((rsvp) => rsvp.user);
+
+        // --- THIS IS THE FIX ---
+        // Check if a custom order has been saved for the locations.
+        if (
+          trip.locationOrder &&
+          trip.locationOrder.length > 0 &&
+          trip.locations.length > 0
+        ) {
+          // Create a map for fast lookups (googlePlaceId -> location object).
+          const locationMap = new Map(
+            trip.locations.map((loc) => [loc.googlePlaceId, loc])
+          );
+
+          // Rebuild the trip.locations array in the correct order.
+          trip.locations = trip.locationOrder
+            .map((id) => locationMap.get(id))
+            .filter(Boolean); // .filter(Boolean) safely removes any deleted locations.
+        }
+        // --- END OF THE FIX ---
+
+        // We create a new trip object for the frontend.
+        return {
+          ...trip,
+          // We rename the `attendees` list to `invitedUsers` to match the prop
+          // that the TripGrid's "Upcoming" filter is expecting.
+          invitedUsers: attendees,
+          // We can now remove the raw rsvps data to keep the payload clean.
+          rsvps: undefined,
+        };
       });
+
+      res.status(200).json({ trips: formattedTrips });
     } catch (error) {
-      console.error("Error fetching trips by user ID:", error);
-      return res.status(500).json({
-        message: "Failed to fetch user's trips.",
-        error: error.message,
-      });
+      console.error("Error fetching trips by user:", error);
+      res
+        .status(500)
+        .json({ message: "An error occurred while fetching trips." });
     }
   },
-
 
   discoverTrips: async (req, res) => {
     try {
       const { userId } = getAuth(req);
-  
+
       if (!userId) {
         return res.status(401).json({
           message: "Unauthorized. Please log in to discover trips.",
           trips: [],
         });
       }
-  
+
       const userPreferences = await prisma.userPreferences.findUnique({
         where: { userId: userId },
       });
-  
+
       const query = {
         where: {
-          private: false, 
-          status: { in: ['ACTIVE', 'COMPLETED'] }, 
-          hostId: { not: userId }, 
+          private: false,
+          status: { in: ["ACTIVE", "COMPLETED"] },
+          hostId: { not: userId },
         },
         include: {
           host: {
@@ -272,24 +284,21 @@ const tripController = {
           savedByUsers: { where: { id: userId }, select: { id: true } },
         },
         orderBy: {
-          startTime: 'desc',
+          startTime: "desc",
         },
         take: 50,
       };
-  
+
       if (userPreferences && userPreferences.location) {
-        console.log(`Filtering discover results for user ${userId} by city: ${userPreferences.location}`);
         query.where.city = {
           equals: userPreferences.location,
-          mode: 'insensitive', // Case-insensitive match for the city name
+          mode: "insensitive", // Case-insensitive match for the city name
         };
       } else {
-        console.log(`User ${userId} has no location preference. Returning all public trips.`);
       }
-        const trips = await prisma.trip.findMany(query);
-  
+      const trips = await prisma.trip.findMany(query);
+
       res.status(200).json({ trips });
-  
     } catch (error) {
       console.error("Error in discoverTrips controller:", error);
       res.status(500).json({
@@ -299,23 +308,15 @@ const tripController = {
     }
   },
 
-
- toggleSaveTrip: async (req, res) => {
+  toggleSaveTrip: async (req, res) => {
     const { tripId } = req.params;
     const userId = req.user?.id;
-
-
-    console.log("--- Toggle Save Request Received ---");
-    console.log("Backend received userId:", userId);
-    console.log("Backend received tripId:", tripId);
-    // ------------------------------------
 
     if (!userId) {
       return res.status(401).json({ message: "Authentication required." });
     }
 
     try {
-      // First, find the trip to see if the current user has already saved it
       const trip = await prisma.trip.findUnique({
         where: { id: tripId },
         select: {
@@ -331,8 +332,7 @@ const tripController = {
 
       const isAlreadySaved = trip.savedByUsers.length > 0;
 
-      // Use a dynamic action: 'disconnect' if it's already saved, 'connect' otherwise
-      const action = isAlreadySaved ? 'disconnect' : 'connect';
+      const action = isAlreadySaved ? "disconnect" : "connect";
 
       await prisma.trip.update({
         where: { id: tripId },
@@ -345,22 +345,19 @@ const tripController = {
 
       const message = isAlreadySaved ? "Trip unsaved." : "Trip saved.";
       return res.status(200).json({ message });
-
     } catch (error) {
       console.error("Error toggling save trip:", error);
       return res.status(500).json({ message: "Failed to update trip." });
     }
   },
 
-
-   getSavedTrips: async (req, res) => {
-    // Get the user ID from your authentication middleware
+  getSavedTrips: async (req, res) => {
     const userId = req.user?.id;
-  
+
     if (!userId) {
       return res.status(401).json({ message: "Authentication required." });
     }
-  
+
     try {
       const savedTrips = await prisma.trip.findMany({
         where: {
@@ -388,50 +385,61 @@ const tripController = {
           // It's important to include this so the heart icon is correctly filled
           savedByUsers: {
             where: {
-                id: userId
+              id: userId,
             },
             select: {
-                id: true
-            }
-          }
+              id: true,
+            },
+          },
         },
         orderBy: {
-          createdAt: 'desc',
+          createdAt: "desc",
         },
       });
-  
+
       return res.status(200).json({ trips: savedTrips });
-  
     } catch (error) {
       console.error("Error fetching saved trips:", error);
       return res.status(500).json({ message: "Failed to fetch saved trips." });
     }
   },
 
-
-  // Example: Get trip by ID
   getTripById: async (req, res) => {
-    const { id } = req.params;
-  
     try {
       const trip = await prisma.trip.findUnique({
-        where: { id: id },
-        include: {
-          host: {
-            select: {
-              name: true, 
-            },
-          },
-          locations: true,
-        },
+        where: { id: req.params.id },
       });
-  
+
       if (!trip) {
         return res.status(404).json({ message: "Trip not found." });
       }
-        return res.status(200).json({ trip });
-  
+
+      if (trip.locationOrder && trip.locationOrder.length > 0) {
+        const orderedLocations = await prisma.location.findMany({
+          where: {
+            googlePlaceId: {
+              in: trip.locationOrder,
+            },
+          },
+        });
+
+        const locationMap = new Map(
+          orderedLocations.map((loc) => [loc.googlePlaceId, loc])
+        );
+        trip.locations = trip.locationOrder
+          .map((id) => locationMap.get(id))
+          .filter(Boolean);
+      } else {
+        const relatedLocations = await prisma.location.findMany({
+          where: { trips: { some: { id: req.params.id } } },
+        });
+        trip.locations = relatedLocations;
+      }
+
+      res.status(200).json({ trip });
     } catch (error) {
+      console.error("Error fetching trip by ID:", error);
+      res.status(500).json({ message: "Failed to fetch trip." });
     }
   },
 
@@ -516,21 +524,18 @@ const tripController = {
    * @returns {Promise<void>} Responds with the created trip or an error message.
    *
    * Request body fields:
-   *   - startTime {string|Date} (required)
-   *   - endTime {string|Date} (required)
-   *   - estimatedTime {string|Date} (optional)
-   *   - title {string} (optional)
-   *   - description {string} (optional)
-   *   - tripImage {string} (optional)
-   *   - maxGuests {number} (optional)
-   *   - city {string} (optional)
+   * - startTime {string|Date} (required)
+   * - endTime {string|Date} (required)
+   * - estimatedTime {string|Date} (optional)
+   * - title {string} (optional)
+   * - description {string} (optional)
+   * - tripImage {string} (optional)
+   * - maxGuests {number} (optional)
+   * - city {string} (optional)
    *
    */
   createTrip: async (req, res) => {
     try {
-      console.log("createTrip: Starting trip creation...");
-
-      // Get user ID from the authenticated request
       const userId = req.user?.id;
 
       if (!userId) {
@@ -540,13 +545,10 @@ const tripController = {
         });
       }
 
-      console.log(`createTrip: Creating trip for user ${userId}`);
-
       const {
         startTime,
         endTime,
         estimatedTime,
-        // hostId, // Ignore hostId from frontend, always use authenticated user
         title,
         description,
         tripImage,
@@ -622,19 +624,13 @@ const tripController = {
     }
   },
 
-  // Example: Update a trip
-  updateTrip: async (req, res) => {
-    // Controller logic here
-  },
-
-
   updateTripDetails: async (req, res) => {
     // 1. Get trip ID from URL parameters
     const { id } = req.params;
-    
+
     // 2. Get title and description from the request body
     const { title, description } = req.body;
-  
+
     // 3. Prepare an object with only the fields to be updated
     const dataToUpdate = {};
     if (title !== undefined) {
@@ -643,29 +639,28 @@ const tripController = {
     if (description !== undefined) {
       dataToUpdate.description = description;
     }
-  
+
     // 4. If there's nothing to update, return an error
     if (Object.keys(dataToUpdate).length === 0) {
       return res.status(400).json({ message: "No update data provided." });
     }
-  
+
     try {
       // 5. Use Prisma to find the trip and update it with the new data
       const updatedTrip = await prisma.trip.update({
         where: { id: id },
         data: dataToUpdate,
       });
-  
+
       return res.status(200).json({
         message: "Trip updated successfully!",
         trip: updatedTrip,
       });
-  
     } catch (error) {
-      if (error.code === 'P2025') {
+      if (error.code === "P2025") {
         return res.status(404).json({ message: "Trip not found." });
       }
-      
+
       // Handle other potential server errors
       console.error("Error updating trip:", error);
       return res.status(500).json({
@@ -695,6 +690,37 @@ const tripController = {
     } catch (error) {
       console.error("Error updating trip status:", error);
       res.status(500).json({ message: "Failed to update trip status" });
+    }
+  },
+
+  updateLocationOrder: async (req, res) => {
+    const tripId = req.params.id;
+    const { locationIds } = req.body;
+
+    if (!locationIds || !Array.isArray(locationIds)) {
+      return res
+        .status(400)
+        .json({ message: "Invalid request: locationIds array is required." });
+    }
+
+    try {
+      // This is now a single, simple update operation.
+      await prisma.trip.update({
+        where: {
+          id: tripId,
+        },
+        data: {
+          // It sets the locationOrder field to the new array of IDs.
+          locationOrder: locationIds,
+        },
+      });
+
+      res.status(200).json({ message: "Location order updated successfully." });
+    } catch (error) {
+      console.error("Failed to update location order:", error);
+      res
+        .status(500)
+        .json({ message: "An error occurred while saving the new order." });
     }
   },
 
@@ -762,28 +788,28 @@ const tripController = {
     }
   },
 
-
   updateTripPrivacy: async (req, res) => {
     const { id } = req.params;
     const { private: isPrivate } = req.body;
-  
-    if (typeof isPrivate !== 'boolean') {
-      return res.status(400).json({ message: "Invalid 'private' status provided. Must be a boolean." });
+
+    if (typeof isPrivate !== "boolean") {
+      return res.status(400).json({
+        message: "Invalid 'private' status provided. Must be a boolean.",
+      });
     }
-  
+
     try {
       const updatedTrip = await prisma.trip.update({
         where: { id: id },
         data: { private: isPrivate },
       });
-  
+
       return res.status(200).json({
-        message: `Trip is now ${isPrivate ? 'private' : 'public'}.`,
+        message: `Trip is now ${isPrivate ? "private" : "public"}.`,
         trip: updatedTrip,
       });
-  
     } catch (error) {
-      if (error.code === 'P2025') {
+      if (error.code === "P2025") {
         return res.status(404).json({ message: "Trip not found." });
       }
       console.error("Error updating trip privacy:", error);
@@ -838,8 +864,6 @@ const tripController = {
       });
     }
   },
-
-  // In your backend trips controller file
 
   removeLocation: async (req, res) => {
     const { id, locationId } = req.params; // id = tripId, locationId = Google Place ID
@@ -902,8 +926,6 @@ const tripController = {
         });
       }
 
-      console.log(`deleteTrip: User ${userId} attempting to delete trip ${id}`);
-
       const trip = await prisma.trip.findUnique({ where: { id } });
 
       if (!trip) {
@@ -924,8 +946,6 @@ const tripController = {
 
       await prisma.trip.delete({ where: { id } });
 
-      console.log(`deleteTrip: Successfully deleted trip ${id}`);
-
       return res.status(200).json({ message: "Trip deleted successfully" });
     } catch (error) {
       console.error("Error deleting trip:", error);
@@ -933,124 +953,126 @@ const tripController = {
     }
   },
 
-  getTripByInviteLink: async (req, res) => {
-    // Controller logic here
-  },
-
-  addCoHost: async (req, res) => {
-    // Controller logic here
-  },
-
-  removeCoHost: async (req, res) => {
-    // Controller logic here
-  },
-
-  createPoll: async (req, res) => {
-    // Controller logic here
-  },
-
-  getTripSchedule: async (req, res) => {
-    // Controller logic here
-    // get time information
-  },
   addProposedGuest: async (req, res) => {
+    const { id } = req.params; // tripId
+    const newGuestsArray = req.body;
+
     try {
-      const { tripId } = req.params;
-      const guestsArray = req.body;
-
-      const guestsWithTripId = guestsArray.map((guest) => ({
-        name: guest.name,
-        email: guest.email,
-        tripId: tripId,
-      }));
-
-      const result = await prisma.proposedGuest.createMany({
-        data: guestsWithTripId,
+      // 1. FETCH all existing proposed guests for this trip to get their emails
+      const existingGuests = await prisma.proposedGuest.findMany({
+        where: { tripId: id },
+        select: { email: true }, // We only need the emails
       });
 
-      res.status(201).json(result);
+      // Use a transaction to safely perform the delete and create operations
+      await prisma.$transaction(async (tx) => {
+        // 2. DELETE the old guests, but only if any exist
+        if (existingGuests.length > 0) {
+          const emailsToDelete = existingGuests.map((guest) => guest.email);
+          await tx.proposedGuest.deleteMany({
+            where: {
+              tripId: id,
+              email: { in: emailsToDelete }, // Satisfy the client's rule
+            },
+          });
+        }
+
+        // 3. CREATE the new list of guests, but only if the new list isn't empty
+        if (newGuestsArray.length > 0) {
+          const newGuestsData = newGuestsArray.map((guest) => ({
+            name: guest.name,
+            email: guest.email,
+            tripId: id,
+          }));
+          await tx.proposedGuest.createMany({
+            data: newGuestsData,
+          });
+        }
+      });
+
+      res.status(201).json({ message: "Guests updated successfully." });
     } catch (error) {
-      console.error("Failed to add proposezz guests:", error);
-      res.status(500).json({ error: "Could not add guests." });
+      console.error("Failed to replace proposed guests:", error);
+      res.status(500).json({ error: "Could not replace guests." });
     }
   },
 
   generateTripSuggestions: async (req, res) => {
     const { userId } = req.params;
-    const destination = "San Francisco";
-    const { startDate, endDate, ...otherTripInfo } = req.body || {};
-    console.debug(
-      "[generateLocationSuggestions] Called with userId:",
-      userId,
-      "and destination:",
-      destination
-    );
+    const { tripId } = req.body;
 
-    if (!userId) {
-      return res.status(400).json({ message: "User ID is required." });
+    if (!userId || !tripId) {
+      return res
+        .status(400)
+        .json({ message: "User ID and Trip ID are required." });
     }
 
     try {
-      const [userPreferences, pastTrips] = await Promise.all([
+      const [userPreferences, pastTrips, currentTrip] = await Promise.all([
         prisma.userPreferences.findUnique({ where: { userId } }),
         prisma.trip.findMany({
-          where: { hostId: userId },
+          where: { hostId: userId, status: "COMPLETED" },
           take: 5,
           orderBy: { createdAt: "desc" },
         }),
+        prisma.trip.findUnique({ where: { id: tripId } }),
       ]);
 
       if (!userPreferences) {
-        console.warn(
-          "[generateLocationSuggestions] No user preferences found for:",
-          userId
-        );
         return res.status(404).json({ message: "User preferences not found." });
       }
 
-      // Build a prompt that includes the user's trip creation info if provided
-      let userDataPrompt = formatDataForPrompt(userPreferences, pastTrips);
-
-      // If destination or other trip info is provided, append it to the prompt for context
-      if (
-        destination ||
-        startDate ||
-        endDate ||
-        Object.keys(otherTripInfo).length > 0
-      ) {
-        let tripContext = "\n\nThe user is currently planning a new trip";
-        if (destination) tripContext += ` to "${destination}"`;
-        if (startDate || endDate) {
-          tripContext += " for the dates";
-          if (startDate) tripContext += ` starting ${startDate}`;
-          if (endDate) tripContext += ` and ending ${endDate}`;
-        }
-        if (Object.keys(otherTripInfo).length > 0) {
-          tripContext += `. Additional trip details: ${JSON.stringify(
-            otherTripInfo
-          )}`;
-        }
-        tripContext +=
-          ". Please tailor your suggestions to be especially relevant to this trip, but still offer a variety of options.";
-        userDataPrompt += tripContext;
+      if (!currentTrip) {
+        return res
+          .status(404)
+          .json({ message: "Current trip data not found." });
       }
 
-      const systemPrompt = `You are an expert travel recommendation engine. Your task is to suggest 5 unique travel LOCATIONS (NOT CITIES) that perfectly match the user's preferences and travel style, inferred from their past trips and the details of the trip they are currently planning (if provided).
+      const destination = currentTrip.city || "the planned destination";
+      console.debug(
+        "[generateLocationSuggestions] Called for userId:",
+        userId,
+        "and destination:",
+        destination
+      );
+
+      const { tripPreferences: groupPreferences, ...otherTripInfo } =
+        req.body || {};
+
+      let userDataPrompt = formatDataForPrompt(
+        userPreferences,
+        pastTrips,
+        groupPreferences
+      );
+
+      let tripContext = `\n\nThe user is currently planning a new trip to "${destination}".`;
+      if (currentTrip.startTime || currentTrip.endTime) {
+        tripContext += " for the dates";
+        if (currentTrip.startTime)
+          tripContext += ` starting ${currentTrip.startTime.toDateString()}`;
+        if (currentTrip.endTime)
+          tripContext += ` and ending ${currentTrip.endTime.toDateString()}`;
+      }
+      tripContext +=
+        ". Please tailor your suggestions to be especially relevant to this trip, offering a variety of location-specific options.";
+      userDataPrompt += tripContext;
+
+      const systemPrompt = `You are an expert travel recommendation engine. Your task is to suggest 5 unique travel LOCATIONS (not just cities) within or near "${destination}" that perfectly match the user's preferences, their group's preferences, and travel style.
 
 Your response MUST be a single, valid JSON object. Do not include any other text, explanations, or markdown formatting like \`\`\`json. The root of the JSON object must be a key named "locations", which holds an array of 5 location objects.
 
 For each location, provide:
-- "city": The location in "City, Country" format.
-- "description": A compelling 2-sentence summary explaining WHY this place is a great match for the user based on their specific data and, if relevant, the trip they are planning.
+- "city": The location name and its city/state in "Location Name, City, ST" format.
+- "description": A compelling 2-sentence summary explaining WHY this place is a great match for the user, referencing their preferences and the trip destination.
 - "best_for": An array of 2-3 keywords describing the vibe (e.g., "Adventure", "Relaxation", "Culture", "Foodie", "Nightlife").
 
-Example of the required JSON structure:
+Example for a trip to Boston:
 {
   "locations": [
     {
-      "city": "Muir Woods National Monument, Mill Valley, CA",
-      "description": "Given your interest in hiking, Muir Woods is a serene, scenic escape. Its Redwoods and history align with your wishes for peaceful and beautiful environments.",
-      "best_for": ["Culture", "History", "Relaxation"]
+      "city": "Isabella Stewart Gardner Museum, Boston, MA",
+      "description": "Given your interest in art and history, this museum offers a unique, intimate experience. Its stunning courtyard is a peaceful escape that aligns with your preference for beautiful environments.",
+      "best_for": ["Art", "History", "Relaxation"]
     }
   ]
 }`;
@@ -1060,96 +1082,162 @@ Example of the required JSON structure:
         { role: "user", content: userDataPrompt },
       ];
 
-      let aiResponse;
-      try {
-        const model = "mistralai/mistral-7b-instruct:free";
-        console.debug(
-          "[generateLocationSuggestions] Sending request to AI model:",
-          model
-        );
-        aiResponse = await getAiCompletion(messages, model, true);
-      } catch (apiError) {
-        console.error(
-          "[generateLocationSuggestions] AI API call failed:",
-          apiError
-        );
-        return res
-          .status(502)
-          .json({ message: "Failed to get a response from the AI service." });
-      }
+      const model = "mistralai/mistral-7b-instruct:free";
+      const aiResponse = await getAiCompletion(messages, model, true);
 
       if (!aiResponse?.choices?.[0]?.message?.content) {
-        console.error(
-          "[generateLocationSuggestions] AI response was empty or malformed."
-        );
-        return res
-          .status(500)
-          .json({ message: "AI returned an invalid or empty response." });
+        throw new Error("AI returned an invalid or empty response.");
       }
 
       const rawContent = aiResponse.choices[0].message.content;
-      console.debug(
-        "[generateLocationSuggestions] Raw AI content received:",
-        rawContent
-      );
+      const suggestions = extractAndParseJson(rawContent);
 
-      let suggestions;
-      try {
-        suggestions = extractAndParseJson(rawContent);
-      } catch (parseError) {
-        console.error(
-          "[generateLocationSuggestions] Failed to parse AI response as JSON.",
-          parseError
-        );
-        console.error("Problematic AI content:", rawContent);
-        return res
-          .status(500)
-          .json({ message: "AI returned data in an unexpected format." });
-      }
-
-      console.info(
-        "[generateLocationSuggestions] Successfully generated suggestions for:",
-        userId
-      );
       res.status(200).json(suggestions);
     } catch (error) {
       console.error(
         "[generateLocationSuggestions] An unexpected error occurred:",
         error
       );
-      res.status(500).json({ message: "An internal server error occurred." });
+      const statusCode = error.message.includes("not found") ? 404 : 500;
+      res.status(statusCode).json({
+        message: error.message || "An internal server error occurred.",
+      });
+    }
+  },
+  createOrReplaceTripPreference: async (req, res) => {
+    const { id } = req.params;
+
+    const {
+      activityPreferences = {},
+      dietaryRestrictions = {},
+      lifestyleChoices = {},
+      budgetDistribution = {},
+      travelStyle = {},
+    } = req.body;
+
+    try {
+      const result = await prisma.tripPreference.upsert({
+        where: { tripId: id },
+        update: {
+          activityPreferences,
+          dietaryRestrictions,
+          lifestyleChoices,
+          budgetDistribution,
+          travelStyle,
+        },
+        create: {
+          tripId: id,
+          activityPreferences,
+          dietaryRestrictions,
+          lifestyleChoices,
+          budgetDistribution,
+          travelStyle,
+        },
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error("Upsert failed:", error);
+      return res.status(500).json({ error: "Could not save trip preference." });
+    }
+  },
+
+  createOrReplaceTripPreference: async (req, res) => {
+    const { id } = req.params;
+
+    const {
+      activityPreferences = {},
+      dietaryRestrictions = {},
+      lifestyleChoices = {},
+      budgetDistribution = {},
+      travelStyle = {},
+    } = req.body;
+
+    try {
+      const result = await prisma.tripPreference.upsert({
+        where: { tripId: id },
+        update: {
+          activityPreferences,
+          dietaryRestrictions,
+          lifestyleChoices,
+          budgetDistribution,
+          travelStyle,
+        },
+        create: {
+          tripId: id,
+          activityPreferences,
+          dietaryRestrictions,
+          lifestyleChoices,
+          budgetDistribution,
+          travelStyle,
+        },
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error("Upsert failed:", error);
+      return res.status(500).json({ error: "Could not save trip preference." });
+    }
+  },
+
+  getTripPreference: async (req, res) => {
+    const { id } = req.params; //tripId
+
+    try {
+      const result = await prisma.tripPreference.findUnique({
+        where: {
+          tripId: id,
+        },
+      });
+      if (!result) {
+        return res.status(404).json({ message: "Trip preference not found." });
+      }
+
+      res.status(200).json(result);
+    } catch (error) {
+      // console.error("Failed to get trip preference:", error);
+      // res.status(500).json({ error: "Could not get trip preference." });
     }
   },
 
   removeProposedGuest: async (req, res) => {
-    // TODO: Implement removeProposedGuest logic
     res.status(501).json({ message: "Not implemented yet" });
   },
   getProposedGuests: async (req, res) => {
-    // TODO: Implement getProposedGuests logic
-    res.status(501).json({ message: "Not implemented yet" });
+    const { id } = req.params;
+
+    try {
+      const proposedGuests = await prisma.proposedGuest.findMany({
+        where: {
+          tripId: id,
+        },
+        select: {
+          email: true,
+        },
+      });
+
+      if (!proposedGuests || proposedGuests.length === 0) {
+        return res.status(200).json([]);
+      }
+
+      const guestEmails = proposedGuests.map((guest) => guest.email);
+
+      const fullGuestProfiles = await prisma.user.findMany({
+        where: {
+          email: {
+            in: guestEmails,
+          },
+        },
+
+        include: {
+          userPreferences: true,
+        },
+      });
+
+      res.status(200).json(fullGuestProfiles);
+    } catch (error) {
+      console.error("Failed to get proposed guests:", error);
+      res.status(500).json({ error: "Could not get proposed guests." });
+    }
   },
-  getTripPolls: async (req, res) => {
-    // TODO: Implement getTripPolls logic
-    res.status(501).json({ message: "Not implemented yet" });
-  },
-  voteOnPoll: async (req, res) => {
-    // TODO: Implement voteOnPoll logic
-    res.status(501).json({ message: "Not implemented yet" });
-  },
-  getTripTemplates: async (req, res) => {
-    // TODO: Implement getTripTemplates logic
-    res.status(501).json({ message: "Not implemented yet" });
-  },
-  cloneTripAsTemplate: async (req, res) => {
-    // TODO: Implement cloneTripAsTemplate logic
-    res.status(501).json({ message: "Not implemented yet" });
-  },
-  updateTripSchedule: async (req, res) => {
-    // TODO: Implement updateTripSchedule logic
-    res.status(501).json({ message: "Not implemented yet" });
-  },
-  // get preferences, etc.
 };
 
 module.exports = tripController;

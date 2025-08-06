@@ -1,6 +1,6 @@
 // server/schedulers/tripStatusUpdater.js
-import cron from 'node-cron';
-import { PrismaClient } from '@prisma/client';
+const cron = require('node-cron');
+const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 
@@ -33,7 +33,7 @@ const updateCompletedTrips = async () => {
   }
 };
 
-export const startTripStatusUpdater = () => {
+const startTripStatusUpdater = () => {
   cron.schedule('0 * * * *', updateCompletedTrips, {
     scheduled: true,
     timezone: "America/Los_Angeles", 
@@ -41,3 +41,6 @@ export const startTripStatusUpdater = () => {
 
   console.log('✅ Trip status updater scheduled to run every hour.');
 };
+
+// Export the function so it can be used in server.js
+module.exports = { startTripStatusUpdater };

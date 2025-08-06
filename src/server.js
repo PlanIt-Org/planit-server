@@ -13,6 +13,8 @@ const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN;
 
 const { protect } = require("./middleware/authMiddleware");
+const { startTripStatusUpdater } = require('../scheduler/tripStatusUpdater');
+
 
 // startTripStatusUpdater();
 
@@ -80,6 +82,8 @@ app.use((err, req, res, next) => {
     ...(process.env.NODE_ENV === "development" && { details: err.message }),
   });
 });
+
+startTripStatusUpdater();
 
 app.use((req, res) => {
   if (!res.headersSent) {

@@ -589,6 +589,95 @@ const createUserPreferences = async (req, res) => {
   }
 };
 
+const updateUsername = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { displayName } = req.body;
+
+    // 1. Authentication and Validation
+    if (!userId) {
+      return res.status(401).json({
+        message: "Authentication error: User ID not found.",
+      });
+    }
+    if (
+      !displayName ||
+      typeof displayName !== "string" ||
+      displayName.trim().length < 3 ||
+      displayName.trim().length > 30
+    ) {
+      return res.status(400).json({
+        message: "Display name must be a string between 3 and 30 characters.",
+      });
+    }
+
+    // 2. Fetch the current user to get their existing profile picture URL
+    const currentUser = await db.user.findUnique({
+      where: { id: userId },
+      select: { profilePictureUrl: true },
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // 3. Parse the existing URL to extract colors and size
+    let background = "007bff"; // Default background
+    let color = "ffffff"; // Default text color
+    let size = 200; // Default size
+
+    if (currentUser.profilePictureUrl) {
+      try {
+        const url = new URL(currentUser.profilePictureUrl);
+        const params = new URLSearchParams(url.search);
+        background = params.get("background") || background;
+        color = params.get("color") || color;
+        size = parseInt(params.get("size"), 10) || size;
+      } catch (e) {
+        console.error("Could not parse existing avatar URL, using defaults.", e);
+      }
+    }
+
+    const trimmedDisplayName = displayName.trim();
+    const newProfilePictureUrl = generateAvatarUrl(
+      trimmedDisplayName,
+      background,
+      color,
+      size
+    );
+
+    // 5. Update the user in the database
+    const updatedUser = await db.user.update({
+      where: { id: userId },
+      data: {
+        name: trimmedDisplayName,
+        profilePictureUrl: newProfilePictureUrl,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        profilePictureUrl: true,
+        phoneNumber: true,
+      },
+    });
+
+    // 6. Send Success Response
+    res.status(200).json({
+      message: "Username updated successfully.",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Error updating username:", error);
+    if (error.code === 'P2025') {
+        return res.status(404).json({ message: "User not found in database." });
+    }
+    res.status(500).json({
+      message: "Failed to update username due to a server error.",
+    });
+  }
+};
+
 /**
  * @desc    Update user preferences in public metadata.
  * @route   PUT /api/users/preferences
@@ -763,37 +852,41 @@ const searchUsers = async (req, res) => {
 };
 
 const resetPassword = async (req, res) => {
-  const { password } = req.body;
-  const accessToken = req.headers.authorization?.split(" ")[1];
-  if (!accessToken) {
-    return res.status(401).json({ error: "Authorization header is missing." });
-  }
-  if (!password) {
-    return res.status(400).json({ error: "New password is required." });
-  }
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser(accessToken);
+  try {
+    const { password } = req.body;
+    const userId = req.user?.id;
 
-  if (userError) {
-    return res.status(401).json({
-      error: "Invalid or expired access token.",
-      details: userError.message,
-    });
-  }
-  const { error: updateError } = await supabase.auth.admin.updateUserById(
-    user.id,
-    { password: password }
-  );
-  if (updateError) {
+    // --- FIX: Add validation to ensure the userId is a valid UUID ---
+    if (!userId || typeof userId !== 'string' || userId.length < 36) {
+      console.error("CRITICAL: Middleware failed to provide a valid user ID.", { userId });
+      return res.status(401).json({
+        message: "Authentication error: User could not be identified.",
+      });
+    }
+
+    if (!password) {
+      return res.status(400).json({ message: "New password is required." });
+    }
+
+    const { error } = await supabase.auth.admin.updateUserById(
+      userId,
+      { password: password }
+    );
+
+    if (error) {
+      console.error("Supabase admin error during password reset:", error);
+      throw new Error("Failed to update password in Supabase.");
+    }
+
+    return res.status(200).json({ message: "Password updated successfully." });
+
+  } catch (error) {
+    console.error("Error in resetPassword controller:", error);
     return res.status(500).json({
-      error: "Could not update password.",
-      details: updateError.message,
+      message: "Could not update password.",
+      details: error.message,
     });
   }
-
-  return res.status(200).json({ message: "Password updated successfully." });
 };
 
 const logout = async (req, res) => {
@@ -801,7 +894,6 @@ const logout = async (req, res) => {
   if (!accessToken) {
     return res.status(200).json({ message: "User is already logged out." });
   }
-  const { error } = await supabase.auth.signOut(accessToken);
   if (error) {
     console.error("Supabase sign out error:", error.message);
     return res
@@ -829,4 +921,5 @@ module.exports = {
   updateUserPreferences,
   getUserPastTrips,
   searchUsers,
+  updateUsername
 };
