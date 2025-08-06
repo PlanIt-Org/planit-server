@@ -852,37 +852,41 @@ const searchUsers = async (req, res) => {
 };
 
 const resetPassword = async (req, res) => {
-  const { password } = req.body;
-  const accessToken = req.headers.authorization?.split(" ")[1];
-  if (!accessToken) {
-    return res.status(401).json({ error: "Authorization header is missing." });
-  }
-  if (!password) {
-    return res.status(400).json({ error: "New password is required." });
-  }
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser(accessToken);
+  try {
+    const { password } = req.body;
+    const userId = req.user?.id;
 
-  if (userError) {
-    return res.status(401).json({
-      error: "Invalid or expired access token.",
-      details: userError.message,
-    });
-  }
-  const { error: updateError } = await supabase.auth.admin.updateUserById(
-    user.id,
-    { password: password }
-  );
-  if (updateError) {
+    // --- FIX: Add validation to ensure the userId is a valid UUID ---
+    if (!userId || typeof userId !== 'string' || userId.length < 36) {
+      console.error("CRITICAL: Middleware failed to provide a valid user ID.", { userId });
+      return res.status(401).json({
+        message: "Authentication error: User could not be identified.",
+      });
+    }
+
+    if (!password) {
+      return res.status(400).json({ message: "New password is required." });
+    }
+
+    const { error } = await supabase.auth.admin.updateUserById(
+      userId,
+      { password: password }
+    );
+
+    if (error) {
+      console.error("Supabase admin error during password reset:", error);
+      throw new Error("Failed to update password in Supabase.");
+    }
+
+    return res.status(200).json({ message: "Password updated successfully." });
+
+  } catch (error) {
+    console.error("Error in resetPassword controller:", error);
     return res.status(500).json({
-      error: "Could not update password.",
-      details: updateError.message,
+      message: "Could not update password.",
+      details: error.message,
     });
   }
-
-  return res.status(200).json({ message: "Password updated successfully." });
 };
 
 const logout = async (req, res) => {
@@ -890,7 +894,6 @@ const logout = async (req, res) => {
   if (!accessToken) {
     return res.status(200).json({ message: "User is already logged out." });
   }
-  const { error } = await supabase.auth.signOut(accessToken);
   if (error) {
     console.error("Supabase sign out error:", error.message);
     return res
