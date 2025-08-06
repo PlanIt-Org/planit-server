@@ -16,8 +16,10 @@ const {
   searchUsers,
   ensureUserProfile,
   updateProfilePicture,
+  updateUsername
 } = require("../controllers/userController");
 const { protect } = require("../middleware/authMiddleware");
+
 
 // --- Public Routes (No authentication required) ---
 router.post("/create", createUser);
@@ -33,6 +35,8 @@ router.use(protect);
 router.post("/ensure-profile", ensureUserProfile);
 
 router.route("/me").get(getCurrentUser).put(updateCurrentUser);
+router.put("/username", updateUsername);
+
 
 router
   .route("/preferences")
