@@ -165,7 +165,7 @@ const tripController = {
 
   getTripsByUserId: async (req, res) => {
     const { userId } = req.params;
-  
+
     try {
       // Step 1: Fetch all trips where the user is the host, has RSVP'd, or has saved the trip.
       const trips = await prisma.trip.findMany({
@@ -178,21 +178,21 @@ const tripController = {
         },
         include: {
           // We need basic info for the trip cards.
-          host: { select: { id: true, name: true } }, 
+          host: { select: { id: true, name: true } },
           // We need the FULL location objects for the modal.
-          locations: true, 
+          locations: true,
           // We need this to correctly show the filled heart icon.
           savedByUsers: {
-              select: { id: true }
+            select: { id: true },
           },
           // This is the new logic to dynamically get attendees.
           rsvps: {
             where: {
-              status: 'YES',
+              status: "YES",
             },
             include: {
               // For each "YES" RSVP, we include the user object.
-              user: { 
+              user: {
                 select: { id: true, name: true, email: true },
               },
             },
@@ -202,26 +202,32 @@ const tripController = {
           createdAt: "desc",
         },
       });
-  
+
       // Step 2: Transform the data to match what the frontend TripGrid expects.
-      const formattedTrips = trips.map(trip => {
+      const formattedTrips = trips.map((trip) => {
         // The `rsvps` field now contains an array of RSVP objects for attendees.
         // We extract just the user information from each RSVP.
-        const attendees = trip.rsvps.map(rsvp => rsvp.user);
-        
+        const attendees = trip.rsvps.map((rsvp) => rsvp.user);
+
         // --- THIS IS THE FIX ---
         // Check if a custom order has been saved for the locations.
-        if (trip.locationOrder && trip.locationOrder.length > 0 && trip.locations.length > 0) {
+        if (
+          trip.locationOrder &&
+          trip.locationOrder.length > 0 &&
+          trip.locations.length > 0
+        ) {
           // Create a map for fast lookups (googlePlaceId -> location object).
-          const locationMap = new Map(trip.locations.map(loc => [loc.googlePlaceId, loc]));
-          
+          const locationMap = new Map(
+            trip.locations.map((loc) => [loc.googlePlaceId, loc])
+          );
+
           // Rebuild the trip.locations array in the correct order.
           trip.locations = trip.locationOrder
-            .map(id => locationMap.get(id))
+            .map((id) => locationMap.get(id))
             .filter(Boolean); // .filter(Boolean) safely removes any deleted locations.
         }
         // --- END OF THE FIX ---
-  
+
         // We create a new trip object for the frontend.
         return {
           ...trip,
@@ -229,15 +235,16 @@ const tripController = {
           // that the TripGrid's "Upcoming" filter is expecting.
           invitedUsers: attendees,
           // We can now remove the raw rsvps data to keep the payload clean.
-          rsvps: undefined, 
+          rsvps: undefined,
         };
       });
-  
+
       res.status(200).json({ trips: formattedTrips });
-  
     } catch (error) {
       console.error("Error fetching trips by user:", error);
-      res.status(500).json({ message: "An error occurred while fetching trips." });
+      res
+        .status(500)
+        .json({ message: "An error occurred while fetching trips." });
     }
   },
 
@@ -404,17 +411,16 @@ const tripController = {
     }
   },
 
-  // Example: Get trip by ID
   getTripById: async (req, res) => {
     try {
       const trip = await prisma.trip.findUnique({
         where: { id: req.params.id },
       });
-  
+
       if (!trip) {
         return res.status(404).json({ message: "Trip not found." });
       }
-  
+
       if (trip.locationOrder && trip.locationOrder.length > 0) {
         const orderedLocations = await prisma.location.findMany({
           where: {
@@ -423,19 +429,21 @@ const tripController = {
             },
           },
         });
-  
-        const locationMap = new Map(orderedLocations.map(loc => [loc.googlePlaceId, loc]));
-        trip.locations = trip.locationOrder.map(id => locationMap.get(id)).filter(Boolean);
-  
+
+        const locationMap = new Map(
+          orderedLocations.map((loc) => [loc.googlePlaceId, loc])
+        );
+        trip.locations = trip.locationOrder
+          .map((id) => locationMap.get(id))
+          .filter(Boolean);
       } else {
         const relatedLocations = await prisma.location.findMany({
           where: { trips: { some: { id: req.params.id } } },
         });
         trip.locations = relatedLocations;
       }
-  
+
       res.status(200).json({ trip });
-  
     } catch (error) {
       console.error("Error fetching trip by ID:", error);
       res.status(500).json({ message: "Failed to fetch trip." });
@@ -629,11 +637,6 @@ const tripController = {
     }
   },
 
-  // Example: Update a trip
-  updateTrip: async (req, res) => {
-    // Controller logic here
-  },
-
   updateTripDetails: async (req, res) => {
     // 1. Get trip ID from URL parameters
     const { id } = req.params;
@@ -706,11 +709,13 @@ const tripController = {
   updateLocationOrder: async (req, res) => {
     const tripId = req.params.id;
     const { locationIds } = req.body;
-  
+
     if (!locationIds || !Array.isArray(locationIds)) {
-      return res.status(400).json({ message: "Invalid request: locationIds array is required." });
+      return res
+        .status(400)
+        .json({ message: "Invalid request: locationIds array is required." });
     }
-  
+
     try {
       // This is now a single, simple update operation.
       await prisma.trip.update({
@@ -722,12 +727,13 @@ const tripController = {
           locationOrder: locationIds,
         },
       });
-  
+
       res.status(200).json({ message: "Location order updated successfully." });
-  
     } catch (error) {
       console.error("Failed to update location order:", error);
-      res.status(500).json({ message: "An error occurred while saving the new order." });
+      res
+        .status(500)
+        .json({ message: "An error occurred while saving the new order." });
     }
   },
 
@@ -872,8 +878,6 @@ const tripController = {
     }
   },
 
-  // In your backend trips controller file
-
   removeLocation: async (req, res) => {
     const { id, locationId } = req.params; // id = tripId, locationId = Google Place ID
 
@@ -966,26 +970,6 @@ const tripController = {
     }
   },
 
-  getTripByInviteLink: async (req, res) => {
-    // Controller logic here
-  },
-
-  addCoHost: async (req, res) => {
-    // Controller logic here
-  },
-
-  removeCoHost: async (req, res) => {
-    // Controller logic here
-  },
-
-  createPoll: async (req, res) => {
-    // Controller logic here
-  },
-
-  getTripSchedule: async (req, res) => {
-    // Controller logic here
-    // get time information
-  },
   addProposedGuest: async (req, res) => {
     const { id } = req.params; // tripId
     const newGuestsArray = req.body;
@@ -1272,27 +1256,6 @@ Example of the required JSON structure:
       res.status(500).json({ error: "Could not get proposed guests." });
     }
   },
-  getTripPolls: async (req, res) => {
-    // TODO: Implement getTripPolls logic
-    res.status(501).json({ message: "Not implemented yet" });
-  },
-  voteOnPoll: async (req, res) => {
-    // TODO: Implement voteOnPoll logic
-    res.status(501).json({ message: "Not implemented yet" });
-  },
-  getTripTemplates: async (req, res) => {
-    // TODO: Implement getTripTemplates logic
-    res.status(501).json({ message: "Not implemented yet" });
-  },
-  cloneTripAsTemplate: async (req, res) => {
-    // TODO: Implement cloneTripAsTemplate logic
-    res.status(501).json({ message: "Not implemented yet" });
-  },
-  updateTripSchedule: async (req, res) => {
-    // TODO: Implement updateTripSchedule logic
-    res.status(501).json({ message: "Not implemented yet" });
-  },
-  // get preferences, etc.
 };
 
 module.exports = tripController;
